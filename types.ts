@@ -1,6 +1,8 @@
 
 
 
+
+
 export enum AppStatus {
     Welcome = 'WELCOME',
     Input = 'INPUT',
@@ -53,7 +55,7 @@ export interface GeneratedImage {
     inductionAudioData: string;
 }
 
-// Fix: Added missing Archetype type for ArchetypeModal.tsx
+// Fix: Add Archetype interface to resolve import error in ArchetypeModal.tsx.
 export interface Archetype {
     id: string;
     name: string;

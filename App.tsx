@@ -1,7 +1,7 @@
 
 
 import React, { useReducer, useEffect, useCallback } from 'react';
-import { AppStatus, ReprogramArea, GeneratedImage, Scenario, AppState, AppAction, Gender } from './types';
+import { AppStatus, ReprogramArea, GeneratedImage, Scenario, AppState, AppAction, Gender, LoadingStep } from './types';
 import WelcomeScreen from './components/WelcomeScreen';
 import InputForm from './components/InputForm';
 import LoadingScreen from './components/LoadingScreen';
@@ -151,14 +151,18 @@ const App: React.FC = () => {
     const handleGenerate = useCallback(async (scenario: Scenario) => {
         const { gender } = state.userInput;
         dispatch({ type: 'START_GENERATION' });
+        let currentStep: LoadingStep = 'prompt';
         try {
-            dispatch({ type: 'SET_LOADING_STEP', payload: 'image' });
+            currentStep = 'image';
+            dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
             const imageUrl = await generateSubconsciousImage(scenario.prompt);
             
-            dispatch({ type: 'SET_LOADING_STEP', payload: 'analysis' });
+            currentStep = 'analysis';
+            dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
             const analysis = await generateSymbolicAnalysis(scenario.title, scenario.prompt, gender);
             
-            dispatch({ type: 'SET_LOADING_STEP', payload: 'affirmation' });
+            currentStep = 'affirmation';
+            dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
             const { affirmationText, affirmationAudioData } = await generateAffirmationAndAudio(analysis, gender);
             const inductionAudioData = await generateInductionAudio(analysis, gender);
 
@@ -177,24 +181,28 @@ const App: React.FC = () => {
 
         } catch (err: any) {
             console.error(err);
-            const errorMessage = `No se pudo completar el paso: '${state.loadingStep}'. Por favor, intenta de nuevo.`;
+            const errorMessage = `No se pudo completar el paso: '${currentStep}'. Por favor, intenta de nuevo.`;
             dispatch({ type: 'GENERATION_FAILURE', payload: errorMessage });
         }
-    }, [state.loadingStep, state.userInput.gender]);
+    }, [state.userInput.gender]);
 
     const handleGenerateCustom = useCallback(async (prompt: string) => {
         const { gender } = state.userInput;
         dispatch({ type: 'START_GENERATION' });
+        let currentStep: LoadingStep = 'prompt';
         try {
-            dispatch({ type: 'SET_LOADING_STEP', payload: 'image' });
+            currentStep = 'image';
+            dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
             const imageUrl = await generateCustomImage(prompt);
 
             const scenarioTitle = "Símbolo Personalizado";
 
-            dispatch({ type: 'SET_LOADING_STEP', payload: 'analysis' });
+            currentStep = 'analysis';
+            dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
             const analysis = await generateSymbolicAnalysis(scenarioTitle, prompt, gender);
             
-            dispatch({ type: 'SET_LOADING_STEP', payload: 'affirmation' });
+            currentStep = 'affirmation';
+            dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
             const { affirmationText, affirmationAudioData } = await generateAffirmationAndAudio(analysis, gender);
             const inductionAudioData = await generateInductionAudio(analysis, gender);
 
@@ -213,10 +221,10 @@ const App: React.FC = () => {
 
         } catch (err: any) {
             console.error(err);
-            const errorMessage = `No se pudo completar el paso: '${state.loadingStep}'. Por favor, intenta de nuevo.`;
+            const errorMessage = `No se pudo completar el paso: '${currentStep}'. Por favor, intenta de nuevo.`;
             dispatch({ type: 'GENERATION_FAILURE', payload: errorMessage });
         }
-    }, [state.loadingStep, state.userInput.gender]);
+    }, [state.userInput.gender]);
     
     const handleEditImage = useCallback(async (imageToEdit: GeneratedImage, prompt: string) => {
         dispatch({ type: 'EDIT_IMAGE_START' });
@@ -269,10 +277,10 @@ const App: React.FC = () => {
                         <h2 className="text-3xl md:text-4xl font-bold text-red-600 dark:text-red-400 mb-4 animate-fade-in-down">Ocurrió un Error</h2>
                         <p className="text-gray-600 dark:text-gray-300 mb-8 max-w-md animate-fade-in-up">{state.error}</p>
                         <button
-                            onClick={() => state.status === AppStatus.Error && state.generatedImage ? dispatch({ type: 'VIEW_HISTORY_ITEM', payload: state.generatedImage }) : dispatch({ type: 'RETRY_FROM_ERROR' })}
+                            onClick={() => dispatch({ type: 'RETRY_FROM_ERROR' })}
                             className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-8 rounded-full text-lg transition-transform transform hover:scale-105 duration-300 shadow-lg shadow-purple-500/50"
                         >
-                           {state.status === AppStatus.Error && state.generatedImage ? 'Volver a la imagen' : 'Intentar de Nuevo'}
+                           Intentar de Nuevo
                         </button>
                     </div>
                 );

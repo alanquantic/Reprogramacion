@@ -234,7 +234,6 @@ export const generateInductionAudio = async (analysis: string, gender: Gender): 
             throw new Error("Failed to generate induction script text.");
         }
         return await textToSpeech(inductionText);
-    // Fix: A 'catch' block requires curly braces if it contains more than one statement.
     } catch (error) {
         console.error("Error generating induction audio:", error);
         throw new Error("Failed to generate induction audio from Gemini.");
