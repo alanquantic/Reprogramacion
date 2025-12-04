@@ -130,8 +130,9 @@ export const SCENARIOS: Scenario[] = [
 
 
 export const LOADING_STEPS: Record<Exclude<LoadingStep, null>, { text: string; progress: number }> = {
-    prompt: { text: "Generando concepto simbólico...", progress: 25 },
-    image: { text: "Creando imagen visual...", progress: 50 },
-    analysis: { text: "Analizando el simbolismo...", progress: 75 },
-    affirmation: { text: "Creando tu afirmación y audio...", progress: 90 },
+    prompt: { text: "Generando concepto simbólico...", progress: 20 },
+    image: { text: "Creando imagen visual...", progress: 45 },
+    analysis: { text: "Analizando el simbolismo...", progress: 70 },
+    narration: { text: "Generando narración del análisis...", progress: 90 },
+    music: { text: "Preparando audio...", progress: 95 }, // Kept for type compatibility
 };

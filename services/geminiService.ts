@@ -144,30 +144,72 @@ export const generateSymbolicAnalysis = async (scenarioTitle: string, prompt: st
     }
 }
 
-const textToSpeech = async (text: string): Promise<string> => {
+// Gemini TTS voice configuration by gender
+// Selected voices with calm, meditative qualities for Spanish narration
+// Aoede and Kore are softer/gentler voices
+const GEMINI_VOICES: Record<Gender, string> = {
+    male: 'Charon',    // Male voice - deep and calm
+    female: 'Aoede',   // Female voice - soft, gentle, soothing  
+    neutral: 'Kore',   // Neutral voice - warm and calming
+};
+
+const GEMINI_VOICE_NAMES: Record<Gender, string> = {
+    male: 'Charon (masculina calmada)',
+    female: 'Aoede (femenina suave)',
+    neutral: 'Kore (neutral cálida)',
+};
+
+/**
+ * Text-to-Speech with gender-based voice selection
+ * Uses Gemini TTS for calm, meditative narration in Spanish
+ * Wraps text with style instructions for meditation delivery
+ */
+const textToSpeechWithGender = async (text: string, gender: Gender): Promise<string> => {
+    const voiceName = GEMINI_VOICES[gender];
+    const voiceLabel = GEMINI_VOICE_NAMES[gender];
+    
+    console.log(`[TTS] Generating speech with voice: ${voiceLabel}`);
+    console.log("[TTS] Text preview:", text.substring(0, 80) + "...");
+    
+    // Wrap text with style instructions for meditation narration
+    const styledText = `<speak slowly and calmly, like a meditation guide, with a soft and soothing tone, taking natural pauses between phrases>
+
+${text}
+
+</speak>`;
+    
     try {
         const ai = getAiClient();
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
-            contents: [{ parts: [{ text }] }],
+            contents: [{ parts: [{ text: styledText }] }],
             config: {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: {
                     voiceConfig: {
-                        prebuiltVoiceConfig: { voiceName: 'Kore' }, // A calm, suitable voice
+                        prebuiltVoiceConfig: { voiceName },
                     },
                 },
             },
         });
+        
         const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        
         if (!base64Audio) {
             throw new Error("No audio data received from TTS API.");
         }
+        
+        console.log("[TTS] Audio generated successfully, size:", base64Audio.length, "chars");
         return base64Audio;
     } catch (error) {
-        console.error("Error generating speech:", error);
+        console.error("[TTS] Error generating speech:", error);
         throw new Error("Failed to generate audio from text.");
     }
+};
+
+// Legacy function for backwards compatibility
+const textToSpeech = async (text: string): Promise<string> => {
+    return textToSpeechWithGender(text, 'neutral');
 };
 
 export const generateAffirmationAndAudio = async (analysis: string, gender: Gender): Promise<{ affirmationText: string, affirmationAudioData: string }> => {
@@ -238,4 +280,47 @@ export const generateInductionAudio = async (analysis: string, gender: Gender): 
         console.error("Error generating induction audio:", error);
         throw new Error("Failed to generate induction audio from Gemini.");
     }
+};
+
+/**
+ * Prepares text for calm, meditative narration.
+ * Adds natural pauses and breathing room for a more relaxed delivery.
+ * Uses longer pauses and breathing cues for a meditation-like pace.
+ */
+function prepareTextForCalmNarration(text: string): string {
+    return text
+        // Add long pauses after paragraphs (breathing moments)
+        .replace(/\n\n/g, '...... ')
+        // Add medium pauses after line breaks
+        .replace(/\n/g, '.... ')
+        // Add pauses after sentences (natural breathing)
+        .replace(/\. /g, '.... ')
+        // Add pauses after colons for anticipation
+        .replace(/: /g, ':.... ')
+        // Add pauses after commas for gentler pacing
+        .replace(/, /g, ',... ')
+        // Clean up excessive pauses
+        .replace(/\.{7,}/g, '......')
+        .trim();
+}
+
+/**
+ * Generates narration audio for the symbolic analysis using Gemini TTS.
+ * Voice is selected based on user's gender preference.
+ * The narration is calm, meditative, and in Spanish with natural pauses.
+ */
+export const generateAnalysisNarration = async (
+    analysisText: string,
+    gender: Gender
+): Promise<string> => {
+    const voiceLabel = GEMINI_VOICE_NAMES[gender];
+    console.log(`[Narration] Generating analysis narration with voice: ${voiceLabel}`);
+    console.log(`[Narration] Analysis length: ${analysisText.length} chars`);
+    
+    // Prepare text with pauses for a more relaxed, meditative delivery
+    const narrativeText = prepareTextForCalmNarration(analysisText);
+    
+    console.log(`[Narration] Prepared text preview: ${narrativeText.substring(0, 100)}...`);
+    
+    return textToSpeechWithGender(narrativeText, gender);
 };

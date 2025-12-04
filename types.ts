@@ -13,7 +13,7 @@ export enum AppStatus {
 }
 
 export type FormStep = 'area' | 'scenario';
-export type LoadingStep = 'prompt' | 'image' | 'analysis' | 'affirmation' | null;
+export type LoadingStep = 'prompt' | 'image' | 'analysis' | 'narration' | 'music' | null;
 export type Gender = 'male' | 'female' | 'neutral';
 
 export enum ReprogramArea {
@@ -49,10 +49,15 @@ export interface GeneratedImage {
     originalUrl?: string; // a copy of the URL before the first edit
     prompt: string;
     scenarioTitle: string;
+    area: ReprogramArea; // Focus area (for music caching)
+    gender: Gender; // User's gender preference (for voice selection)
     analysis: string;
     affirmation: string;
-    affirmationAudioData: string;
+    // Audio data fields (stored in IndexedDB, not localStorage)
+    affirmationAudioData: string; // Legacy - kept for backwards compatibility
     inductionAudioData: string;
+    analysisAudioData: string; // Narration of analysis (ElevenLabs TTS)
+    backgroundMusicData: string; // Relaxing background music (Gemini generated, 15s loop)
 }
 
 // Fix: Add Archetype interface to resolve import error in ArchetypeModal.tsx.
