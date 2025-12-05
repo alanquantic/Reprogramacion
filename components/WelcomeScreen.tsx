@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 interface WelcomeScreenProps {
     onStart: () => void;
 }
 
-const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStart }) => {
+const WelcomeScreen: React.FC<WelcomeScreenProps> = memo(({ onStart }) => {
     return (
         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] text-center px-4">
             <div className="max-w-3xl">
@@ -23,6 +23,8 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStart }) => {
             </div>
         </div>
     );
-};
+});
+
+WelcomeScreen.displayName = 'WelcomeScreen';
 
 export default WelcomeScreen;
