@@ -212,7 +212,11 @@ const textToSpeech = async (text: string): Promise<string> => {
     return textToSpeechWithGender(text, 'neutral');
 };
 
-export const generateAffirmationAndAudio = async (analysis: string, gender: Gender): Promise<{ affirmationText: string, affirmationAudioData: string }> => {
+/**
+ * Generates only affirmation text (no audio) for faster performance.
+ * Audio is generated separately only for the analysis narration.
+ */
+export const generateAffirmationText = async (analysis: string, gender: Gender): Promise<string> => {
     const genderInstruction = `El género del usuario es ${gender === 'male' ? 'masculino' : gender === 'female' ? 'femenino' : 'neutro'}. Asegúrate de que los adjetivos en la afirmación concuerden con este género (ej. 'poderoso' para masculino, 'poderosa' para femenino).`;
 
     const textPrompt = `
@@ -230,19 +234,23 @@ export const generateAffirmationAndAudio = async (analysis: string, gender: Gend
             model: 'gemini-2.5-flash',
             contents: textPrompt,
         });
-        const affirmationText = textResponse.text.trim().replace(/"/g, ''); // Remove quotes
+        const affirmationText = textResponse.text.trim().replace(/"/g, '');
 
         if (!affirmationText) {
             throw new Error("Failed to generate affirmation text.");
         }
 
-        const affirmationAudioData = await textToSpeech(affirmationText);
-
-        return { affirmationText, affirmationAudioData };
+        return affirmationText;
     } catch (error) {
         console.error("Error generating affirmation:", error);
         throw new Error("Failed to generate affirmation from Gemini.");
     }
+};
+
+// Legacy function kept for backwards compatibility
+export const generateAffirmationAndAudio = async (analysis: string, gender: Gender): Promise<{ affirmationText: string, affirmationAudioData: string }> => {
+    const affirmationText = await generateAffirmationText(analysis, gender);
+    return { affirmationText, affirmationAudioData: '' }; // No audio needed
 };
 
 

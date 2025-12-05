@@ -1,7 +1,7 @@
 import React, { useReducer, useEffect, useCallback, useState, Suspense, lazy } from 'react';
 import { AppStatus, ReprogramArea, GeneratedImage, Scenario, AppState, AppAction, LoadingStep } from './types';
 import ThemeSwitcher from './components/ThemeSwitcher';
-import { generateSubconsciousImage, generateCustomImage, generateSymbolicAnalysis, generateAffirmationAndAudio, editImageWithPrompt, generateAnalysisNarration } from './services/geminiService';
+import { generateSubconsciousImage, generateCustomImage, generateSymbolicAnalysis, generateAffirmationText, editImageWithPrompt, generateAnalysisNarration } from './services/geminiService';
 import { initStorage, getHistory, saveToHistory, deleteFromHistory, updateHistoryItem, getSetting, saveSetting } from './services/storageService';
 import { getBackgroundMusic } from './services/musicService';
 import { canProceed, recordRequest, getTimeUntilReset, RATE_LIMITS } from './services/rateLimiter';
@@ -235,21 +235,20 @@ const App: React.FC = () => {
                 generateSymbolicAnalysis(scenario.title, scenario.prompt, gender),
             ]);
             
-            // Step 3: Generate affirmation text (for display)
+            // Step 3: Generate affirmation text (fast, no audio generation)
             currentStep = 'analysis';
             dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
-            const { affirmationText } = await generateAffirmationAndAudio(analysis, gender);
+            const affirmationText = await generateAffirmationText(analysis, gender);
 
-            // Step 4: Generate analysis narration (voice based on gender)
+            // Step 4 & 5: Generate narration AND load music in PARALLEL for speed
             currentStep = 'narration';
             dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
             recordRequest('tts-generation');
-            const analysisAudioData = await generateAnalysisNarration(analysis, gender);
-
-            // Step 5: Load pre-recorded background music for the area
-            currentStep = 'music';
-            dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
-            const backgroundMusicData = await getBackgroundMusic(area);
+            
+            const [analysisAudioData, backgroundMusicData] = await Promise.all([
+                generateAnalysisNarration(analysis, gender),
+                getBackgroundMusic(area),
+            ]);
 
             const newImage: GeneratedImage = {
                 id: scenario.id + '-' + Date.now(),
@@ -304,21 +303,20 @@ const App: React.FC = () => {
                 generateSymbolicAnalysis(scenarioTitle, prompt, gender),
             ]);
             
-            // Step 3: Generate affirmation text (for display)
+            // Step 3: Generate affirmation text (fast, no audio generation)
             currentStep = 'analysis';
             dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
-            const { affirmationText } = await generateAffirmationAndAudio(analysis, gender);
+            const affirmationText = await generateAffirmationText(analysis, gender);
 
-            // Step 4: Generate analysis narration (voice based on gender)
+            // Step 4 & 5: Generate narration AND load music in PARALLEL for speed
             currentStep = 'narration';
             dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
             recordRequest('tts-generation');
-            const analysisAudioData = await generateAnalysisNarration(analysis, gender);
-
-            // Step 5: Load pre-recorded background music for the area
-            currentStep = 'music';
-            dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
-            const backgroundMusicData = await getBackgroundMusic(area);
+            
+            const [analysisAudioData, backgroundMusicData] = await Promise.all([
+                generateAnalysisNarration(analysis, gender),
+                getBackgroundMusic(area),
+            ]);
 
             const newImage: GeneratedImage = {
                 id: 'custom-' + Date.now(),
