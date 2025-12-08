@@ -12,10 +12,11 @@ export enum AppStatus {
     History = 'HISTORY',
 }
 
-export type FormStep = 'area' | 'scenario';
+export type FormStep = 'contentLanguage' | 'area' | 'scenario';
 export type LoadingStep = 'prompt' | 'image' | 'analysis' | 'narration' | 'music' | null;
 export type Gender = 'male' | 'female' | 'neutral';
 export type Language = 'es' | 'en';
+export type ContentLanguage = 'es-latam' | 'en'; // Language for generated content and narration
 
 export enum ReprogramArea {
     Physical = 'FÍSICO',
@@ -73,6 +74,7 @@ export interface AppState {
     status: AppStatus;
     formStep: FormStep;
     userInput: {
+        contentLanguage: ContentLanguage;
         area: ReprogramArea | null;
         scenario: Scenario | null;
         gender: Gender;
@@ -92,6 +94,7 @@ export interface AppState {
 // Actions for the reducer
 export type AppAction =
     | { type: 'START_SESSION' }
+    | { type: 'SET_CONTENT_LANGUAGE'; payload: ContentLanguage }
     | { type: 'SELECT_AREA'; payload: ReprogramArea }
     | { type: 'SELECT_SCENARIO'; payload: Scenario }
     | { type: 'SET_GENDER'; payload: Gender }

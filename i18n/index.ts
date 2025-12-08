@@ -173,6 +173,15 @@ export interface Translations {
     quotaLoading: string;
     quotaError: string;
     quotaRefresh: string;
+    
+    // Content Language Selection Step
+    contentLangStepTitle: string;
+    contentLangStepDescription: string;
+    contentLangSpanish: string;
+    contentLangSpanishDesc: string;
+    contentLangEnglish: string;
+    contentLangEnglishDesc: string;
+    contentLangContinue: string;
 }
 
 const translations: Record<Language, Translations> = {

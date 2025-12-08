@@ -5,7 +5,7 @@
  */
 
 import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
-import { Gender, Language } from '../types';
+import { Gender, ContentLanguage } from '../types';
 
 // Helper function to initialize the AI client on demand, preventing a startup crash.
 const getAiClient = () => {
@@ -16,9 +16,17 @@ const getAiClient = () => {
     return new GoogleGenAI({ apiKey });
 };
 
-// Language-specific prompt configurations
-const LANGUAGE_CONFIG = {
-    es: {
+// Content language-specific prompt configurations
+// 'es-latam' = Spanish Latin American (for generated text and narration)
+// 'en' = English (for generated text and narration)
+const LANGUAGE_CONFIG: Record<ContentLanguage, {
+    imageStyle: string;
+    customImagePrompt: (prompt: string) => string;
+    genderInstruction: (gender: Gender) => string;
+    analysisPrompt: (scenarioTitle: string, prompt: string, genderInstruction: string) => string;
+    affirmationPrompt: (analysis: string, genderInstruction: string) => string;
+}> = {
+    'es-latam': {
         imageStyle: 'arte visionario, estilo de arte digital, detallado, alta resolución, onírico, simbólico, cargado emocionalmente, fotorrealista',
         customImagePrompt: (prompt: string) => `Crea una imagen simbólica y onírica basada en esta intención: "${prompt}". Estilo de arte digital, detallado, alta resolución, cargado emocionalmente, fotorrealista, arte visionario.`,
         genderInstruction: (gender: Gender) => `El usuario se identifica con el género ${gender === 'male' ? 'masculino' : gender === 'female' ? 'femenino' : 'neutro'}. Dirígete a él/ella/elle de forma apropiada y asegúrate de que todos los adjetivos concuerden.`,
@@ -36,7 +44,7 @@ const LANGUAGE_CONFIG = {
             - Explica cómo la imagen representa la integración de la sombra (cómo el 'problema' se convierte en una fortaleza).
             - Conecta la escena con la intención de sanación del escenario.
             - Habla directamente al usuario ('Esta imagen te invita a...'), usando el género correcto.
-            - Responde ÚNICAMENTE en español.
+            - IMPORTANTE: Responde ÚNICAMENTE en español latinoamericano (no uses "vosotros" ni conjugaciones de España, usa "ustedes" y formas latinoamericanas).
         `,
         affirmationPrompt: (analysis: string, genderInstruction: string) => `
             Basado en el siguiente análisis psicológico, crea una afirmación corta y poderosa en primera persona ("Yo soy...", "Yo elijo...", "Yo permito...").
@@ -45,10 +53,10 @@ const LANGUAGE_CONFIG = {
             Análisis: "${analysis}"
             Contexto Adicional: ${genderInstruction}
 
-            Genera únicamente la frase de afirmación en español.
+            Genera únicamente la frase de afirmación en español latinoamericano.
         `,
     },
-    en: {
+    'en': {
         imageStyle: 'visionary art, digital art style, detailed, high resolution, dreamlike, symbolic, emotionally charged, photorealistic',
         customImagePrompt: (prompt: string) => `Create a symbolic and dreamlike image based on this intention: "${prompt}". Digital art style, detailed, high resolution, emotionally charged, photorealistic, visionary art.`,
         genderInstruction: (gender: Gender) => `The user identifies with the ${gender === 'male' ? 'masculine' : gender === 'female' ? 'feminine' : 'neutral'} gender. Address them appropriately and ensure all adjectives agree.`,
@@ -80,8 +88,8 @@ const LANGUAGE_CONFIG = {
     },
 };
 
-export const generateSubconsciousImage = async (prompt: string, language: Language): Promise<string> => {
-    const config = LANGUAGE_CONFIG[language];
+export const generateSubconsciousImage = async (prompt: string, contentLanguage: ContentLanguage): Promise<string> => {
+    const config = LANGUAGE_CONFIG[contentLanguage];
     const fullPrompt = `${prompt}, ${config.imageStyle}.`;
     try {
         const ai = getAiClient();
@@ -108,8 +116,8 @@ export const generateSubconsciousImage = async (prompt: string, language: Langua
     }
 };
 
-export const generateCustomImage = async (prompt: string, language: Language): Promise<string> => {
-    const config = LANGUAGE_CONFIG[language];
+export const generateCustomImage = async (prompt: string, contentLanguage: ContentLanguage): Promise<string> => {
+    const config = LANGUAGE_CONFIG[contentLanguage];
     const fullPrompt = config.customImagePrompt(prompt);
     try {
         const ai = getAiClient();
@@ -187,9 +195,9 @@ export const generateSymbolicAnalysis = async (
     scenarioTitle: string,
     prompt: string,
     gender: Gender,
-    language: Language
+    contentLanguage: ContentLanguage
 ): Promise<string> => {
-    const config = LANGUAGE_CONFIG[language];
+    const config = LANGUAGE_CONFIG[contentLanguage];
     const genderInstruction = config.genderInstruction(gender);
     const analysisPrompt = config.analysisPrompt(scenarioTitle, prompt, genderInstruction);
 
@@ -213,9 +221,9 @@ export const generateSymbolicAnalysis = async (
 export const generateAffirmationText = async (
     analysis: string,
     gender: Gender,
-    language: Language
+    contentLanguage: ContentLanguage
 ): Promise<string> => {
-    const config = LANGUAGE_CONFIG[language];
+    const config = LANGUAGE_CONFIG[contentLanguage];
     const genderInstruction = config.genderInstruction(gender);
     const textPrompt = config.affirmationPrompt(analysis, genderInstruction);
 
