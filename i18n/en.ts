@@ -171,5 +171,14 @@ export const en: Translations = {
     quotaLoading: 'Loading...',
     quotaError: 'Error loading',
     quotaRefresh: 'Refresh',
+    
+    // Content Language Selection Step
+    contentLangStepTitle: 'What language do you want for your experience?',
+    contentLangStepDescription: 'Choose the language for generated text and voice narration',
+    contentLangSpanish: 'Español',
+    contentLangSpanishDesc: 'Texto y narración en español latinoamericano',
+    contentLangEnglish: 'English',
+    contentLangEnglishDesc: 'Text and narration in English',
+    contentLangContinue: 'Continue',
 };
 

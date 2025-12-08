@@ -4,22 +4,39 @@
  * This is the PRIMARY TTS service for narration in the app
  */
 
-import { Gender, Language } from '../types';
+import { Gender, ContentLanguage } from '../types';
 
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1';
 
-// Voice IDs from ElevenLabs - multilingual voices that support both Spanish and English
-const VOICE_IDS: Record<Gender, string> = {
-    male: 'onwK4e9ZLuTAKqWW03F9',     // "Daniel" - calm male voice, multilingual
-    female: 'XB0fDUnXU5powFXDhCwa',   // "Charlotte" - calm female voice, multilingual
-    neutral: 'EXAVITQu4vr4xnSDxMaL',  // "Sarah" - neutral/soft voice, multilingual
+// Voice IDs organized by content language
+// Optimized for meditation/relaxation narration
+// For Spanish Latin American: Calm, soothing voices with Latin American support
+// For English: Popular meditation voices with calm, serene qualities
+const VOICE_IDS: Record<ContentLanguage, Record<Gender, string>> = {
+    'es-latam': {
+        male: 'ErXwobaYiN019PkySvjV',     // "Antoni" - calm, comforting, deep voice
+        female: 'piTKgcLEGmPE4e6mEKli',   // "Nicole" - whispery, very calm, intimate
+        neutral: 'XrExE9yKIg1WjnnlVkGX',  // "Matilda" - warm, comforting, soft
+    },
+    'en': {
+        male: 'TxGEqnHWrfWFTfGW9XjX',     // "Josh" - deep, calm, narrative style
+        female: '21m00Tcm4TlvDq8ikWAM',   // "Rachel" - #1 most popular for meditation
+        neutral: 'EXAVITQu4vr4xnSDxMaL',  // "Bella" - soft, gentle, comforting
+    },
 };
 
 // Voice names for logging
-const VOICE_NAMES: Record<Gender, string> = {
-    male: 'Daniel',
-    female: 'Charlotte',
-    neutral: 'Sarah',
+const VOICE_NAMES: Record<ContentLanguage, Record<Gender, string>> = {
+    'es-latam': {
+        male: 'Antoni (Calm/Deep)',
+        female: 'Nicole (Whispery/Intimate)',
+        neutral: 'Matilda (Warm/Soft)',
+    },
+    'en': {
+        male: 'Josh (Narrative/Serene)',
+        female: 'Rachel (Meditation #1)',
+        neutral: 'Bella (Gentle/Comforting)',
+    },
 };
 
 interface ElevenLabsVoiceSettings {
@@ -29,11 +46,12 @@ interface ElevenLabsVoiceSettings {
     use_speaker_boost: boolean;
 }
 
-// Settings optimized for calm, meditative narration
+// Settings optimized for meditation and relaxation narration
+// These values create a calm, soothing, and consistent voice delivery
 const DEFAULT_VOICE_SETTINGS: ElevenLabsVoiceSettings = {
-    stability: 0.80,        // Higher stability for consistent calm tone
-    similarity_boost: 0.70, // Good similarity for natural sound
-    style: 0.35,            // Lower style for more neutral, meditative delivery
+    stability: 0.85,        // Higher stability = more consistent, calm, predictable tone
+    similarity_boost: 0.65, // Balanced similarity for natural but controlled sound
+    style: 0.20,            // Lower style = more neutral, meditative, less expressive
     use_speaker_boost: true,
 };
 
@@ -116,22 +134,23 @@ function prepareTextForMeditativeNarration(text: string): string {
 
 /**
  * Generates narration audio for the symbolic analysis
- * Voice is selected based on user's gender preference
- * Language is automatically handled by the multilingual model
+ * Voice is selected based on user's gender preference AND content language
+ * - Spanish Latin American: Uses voices with Latin American accent
+ * - English: Uses voices with neutral/American accent
  * 
  * @param analysisText - The text to narrate (already in the correct language from Gemini)
  * @param gender - User's gender preference for voice selection
- * @param language - The language of the text (for logging purposes)
+ * @param contentLanguage - The language of the content ('es-latam' | 'en')
  */
 export async function generateAnalysisNarration(
     analysisText: string,
     gender: Gender,
-    language: Language
+    contentLanguage: ContentLanguage
 ): Promise<string> {
-    const voiceId = VOICE_IDS[gender];
-    const voiceName = VOICE_NAMES[gender];
+    const voiceId = VOICE_IDS[contentLanguage][gender];
+    const voiceName = VOICE_NAMES[contentLanguage][gender];
     
-    console.log(`[ElevenLabs] Generating ${language.toUpperCase()} narration with voice: ${voiceName} (${gender})`);
+    console.log(`[ElevenLabs] Generating ${contentLanguage.toUpperCase()} narration with voice: ${voiceName} (${gender})`);
     console.log(`[ElevenLabs] Text length: ${analysisText.length} chars`);
     
     // Prepare text for meditative delivery

@@ -32,8 +32,8 @@ const ONBOARDING_COMPLETE_KEY = 'onboardingComplete';
 
 const initialState: AppState = {
     status: AppStatus.Welcome,
-    formStep: 'area',
-    userInput: { area: null, scenario: null, gender: 'neutral' },
+    formStep: 'contentLanguage',
+    userInput: { contentLanguage: 'es-latam', area: null, scenario: null, gender: 'neutral' },
     generatedImage: null,
     loadingStep: null,
     error: null,
@@ -51,11 +51,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
             return {
                 ...state,
                 status: AppStatus.Input,
-                formStep: 'area',
-                userInput: { area: null, scenario: null, gender: 'neutral' },
+                formStep: 'contentLanguage',
+                userInput: { ...state.userInput, area: null, scenario: null, gender: 'neutral' },
                 generatedImage: null,
                 error: null,
             };
+        case 'SET_CONTENT_LANGUAGE':
+            return { ...state, userInput: { ...state.userInput, contentLanguage: action.payload } };
         case 'SELECT_AREA':
             return { ...state, userInput: { ...state.userInput, area: action.payload }, formStep: 'scenario' };
         case 'SELECT_SCENARIO':
@@ -85,8 +87,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
             return {
                 ...state,
                 status: AppStatus.Input,
-                formStep: 'area',
-                userInput: { area: null, scenario: null, gender: 'neutral' },
+                formStep: 'contentLanguage',
+                userInput: { ...state.userInput, area: null, scenario: null, gender: 'neutral' },
                 generatedImage: null,
                 error: null,
                 viewingHistoryItem: null
@@ -224,7 +226,7 @@ const AppContent: React.FC = () => {
     }, []);
 
     const handleGenerate = useCallback(async (scenario: Scenario) => {
-        const { gender, area } = state.userInput;
+        const { gender, area, contentLanguage } = state.userInput;
         if (!area) return;
         
         dispatch({ type: 'START_GENERATION' });
@@ -243,14 +245,14 @@ const AppContent: React.FC = () => {
             
             recordRequest('image-generation');
             const [imageUrl, analysis] = await Promise.all([
-                generateSubconsciousImage(scenario.prompt, language),
-                generateSymbolicAnalysis(scenarioTitle, scenario.prompt, gender, language),
+                generateSubconsciousImage(scenario.prompt, contentLanguage),
+                generateSymbolicAnalysis(scenarioTitle, scenario.prompt, gender, contentLanguage),
             ]);
             
             // Step 3: Generate affirmation text (fast, no audio generation)
             currentStep = 'analysis';
             dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
-            const affirmationText = await generateAffirmationText(analysis, gender, language);
+            const affirmationText = await generateAffirmationText(analysis, gender, contentLanguage);
 
             // Step 4 & 5: Generate narration (ElevenLabs) AND load music in PARALLEL for speed
             currentStep = 'narration';
@@ -258,7 +260,7 @@ const AppContent: React.FC = () => {
             recordRequest('tts-generation');
             
             const [analysisAudioData, backgroundMusicData] = await Promise.all([
-                generateAnalysisNarration(analysis, gender, language),
+                generateAnalysisNarration(analysis, gender, contentLanguage),
                 getBackgroundMusic(area),
             ]);
 
@@ -292,10 +294,10 @@ const AppContent: React.FC = () => {
                     : `Could not complete step: '${currentStep}'. Please try again.`;
             dispatch({ type: 'GENERATION_FAILURE', payload: errorMessage });
         }
-    }, [state.userInput.gender, state.userInput.area, language, t, checkRateLimits]);
+    }, [state.userInput.gender, state.userInput.area, state.userInput.contentLanguage, t, checkRateLimits]);
 
     const handleGenerateCustom = useCallback(async (prompt: string) => {
-        const { gender, area } = state.userInput;
+        const { gender, area, contentLanguage } = state.userInput;
         if (!area) return;
         
         dispatch({ type: 'START_GENERATION' });
@@ -313,14 +315,14 @@ const AppContent: React.FC = () => {
             
             recordRequest('image-generation');
             const [imageUrl, analysis] = await Promise.all([
-                generateCustomImage(prompt, language),
-                generateSymbolicAnalysis(scenarioTitle, prompt, gender, language),
+                generateCustomImage(prompt, contentLanguage),
+                generateSymbolicAnalysis(scenarioTitle, prompt, gender, contentLanguage),
             ]);
             
             // Step 3: Generate affirmation text (fast, no audio generation)
             currentStep = 'analysis';
             dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
-            const affirmationText = await generateAffirmationText(analysis, gender, language);
+            const affirmationText = await generateAffirmationText(analysis, gender, contentLanguage);
 
             // Step 4 & 5: Generate narration (ElevenLabs) AND load music in PARALLEL for speed
             currentStep = 'narration';
@@ -328,7 +330,7 @@ const AppContent: React.FC = () => {
             recordRequest('tts-generation');
             
             const [analysisAudioData, backgroundMusicData] = await Promise.all([
-                generateAnalysisNarration(analysis, gender, language),
+                generateAnalysisNarration(analysis, gender, contentLanguage),
                 getBackgroundMusic(area),
             ]);
 
@@ -362,7 +364,7 @@ const AppContent: React.FC = () => {
                     : `Could not complete step: '${currentStep}'. Please try again.`;
             dispatch({ type: 'GENERATION_FAILURE', payload: errorMessage });
         }
-    }, [state.userInput.gender, state.userInput.area, language, t, checkRateLimits]);
+    }, [state.userInput.gender, state.userInput.area, state.userInput.contentLanguage, t, checkRateLimits]);
     
     const handleEditImage = useCallback(async (imageToEdit: GeneratedImage, prompt: string) => {
         // Check rate limit for image editing

@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback, memo } from 'react';
-import { ReprogramArea, Scenario, AppState, AppAction, Gender } from '../types';
+import { ReprogramArea, Scenario, AppState, AppAction, Gender, ContentLanguage } from '../types';
 import { AREAS, SCENARIOS, getScenarioTitle } from '../constants';
 import { IconRenderer } from './icons/Icons';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -68,7 +68,7 @@ CustomPromptInput.displayName = 'CustomPromptInput';
 const InputForm: React.FC<InputFormProps> = ({ state, dispatch, onGenerate, onGenerateCustom }) => {
     const { t } = useLanguage();
     const { formStep, userInput, lastSelections } = state;
-    const { area, gender } = userInput;
+    const { area, gender, contentLanguage } = userInput;
     const [isCustomizing, setIsCustomizing] = useState(false);
 
     const currentScenarios = useMemo(() => {
@@ -100,8 +100,56 @@ const InputForm: React.FC<InputFormProps> = ({ state, dispatch, onGenerate, onGe
         return t[areaInfo.name as keyof Translations] || areaInfo.name;
     };
 
+    const handleContentLanguageSelect = useCallback((lang: ContentLanguage) => {
+        dispatch({ type: 'SET_CONTENT_LANGUAGE', payload: lang });
+        dispatch({ type: 'GO_TO_STEP', payload: 'area' });
+    }, [dispatch]);
+
+    const ContentLanguageStep = () => (
+        <div className="p-4 md:p-8 text-center max-w-3xl mx-auto animate-slide-in-from-right">
+            <h2 className="text-3xl font-bold mb-2">{t.contentLangStepTitle}</h2>
+            <p className="text-gray-500 dark:text-gray-400 mb-8">{t.contentLangStepDescription}</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+                {/* Spanish Latin American Option */}
+                <button
+                    onClick={() => handleContentLanguageSelect('es-latam')}
+                    className={`p-8 rounded-xl border-2 transition-all duration-300 text-center transform hover:-translate-y-1 ${
+                        contentLanguage === 'es-latam'
+                            ? 'border-purple-500 ring-2 ring-purple-300 bg-purple-50 dark:bg-purple-900/30 shadow-lg'
+                            : 'border-gray-300 dark:border-purple-500/30 bg-white dark:bg-gray-800/50 hover:border-purple-500 dark:hover:border-purple-400 hover:shadow-lg'
+                    }`}
+                >
+                    <div className="text-5xl mb-4">🇲🇽</div>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{t.contentLangSpanish}</h3>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">{t.contentLangSpanishDesc}</p>
+                </button>
+
+                {/* English Option */}
+                <button
+                    onClick={() => handleContentLanguageSelect('en')}
+                    className={`p-8 rounded-xl border-2 transition-all duration-300 text-center transform hover:-translate-y-1 ${
+                        contentLanguage === 'en'
+                            ? 'border-purple-500 ring-2 ring-purple-300 bg-purple-50 dark:bg-purple-900/30 shadow-lg'
+                            : 'border-gray-300 dark:border-purple-500/30 bg-white dark:bg-gray-800/50 hover:border-purple-500 dark:hover:border-purple-400 hover:shadow-lg'
+                    }`}
+                >
+                    <div className="text-5xl mb-4">🇺🇸</div>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{t.contentLangEnglish}</h3>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">{t.contentLangEnglishDesc}</p>
+                </button>
+            </div>
+        </div>
+    );
+
     const AreaStep = () => (
         <div className="p-4 md:p-8 text-center max-w-4xl mx-auto animate-slide-in-from-right">
+            <button 
+                onClick={() => dispatch({ type: 'GO_TO_STEP', payload: 'contentLanguage' })} 
+                className="text-purple-600 dark:text-purple-300 hover:text-purple-800 dark:hover:text-purple-100 mb-6 text-sm block"
+            >
+                ← {contentLanguage === 'es-latam' ? 'Cambiar idioma' : 'Change language'}
+            </button>
             <h2 className="text-3xl font-bold mb-2">{t.step1Title}</h2>
             <p className="text-gray-500 dark:text-gray-400 mb-8">{t.step1Description}</p>
             {lastSelections.areaId && (
@@ -220,7 +268,13 @@ const InputForm: React.FC<InputFormProps> = ({ state, dispatch, onGenerate, onGe
         );
     };
 
-    return formStep === 'area' ? <AreaStep /> : <ScenarioStep />;
+    if (formStep === 'contentLanguage') {
+        return <ContentLanguageStep />;
+    }
+    if (formStep === 'area') {
+        return <AreaStep />;
+    }
+    return <ScenarioStep />;
 };
 
 export default InputForm;
