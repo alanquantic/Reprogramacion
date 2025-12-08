@@ -4,6 +4,7 @@ import MeditationMode from './MeditationMode';
 import ImageEditor from './ImageEditor';
 import ShareButton from './ShareButton';
 import { base64ToBlobUrl } from '../utils/imageOptimizer';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface ResultDisplayProps {
     image: GeneratedImage;
@@ -21,6 +22,7 @@ const SectionHeader: React.FC<{ children: React.ReactNode; className?: string }>
 SectionHeader.displayName = 'SectionHeader';
 
 const ResultDisplay: React.FC<ResultDisplayProps> = memo(({ image, onBack, isFromHistory, onEditImage, isEditingImage, dispatch }) => {
+    const { t } = useLanguage();
     const [isMeditating, setIsMeditating] = useState(false);
 
     // Optimize image URL - convert base64 to blob URL for better performance
@@ -38,10 +40,10 @@ const ResultDisplay: React.FC<ResultDisplayProps> = memo(({ image, onBack, isFro
     return (
         <div className="p-4 md:p-8 max-w-3xl mx-auto animate-fade-in text-center">
             <div className="mb-8">
-                <h2 className="text-3xl font-bold mb-2">Tu Símbolo de Poder</h2>
+                <h2 className="text-3xl font-bold mb-2">{t.resultTitle}</h2>
                  <p className="text-gray-500 dark:text-gray-400">{image.scenarioTitle}</p>
                 <p className="text-gray-600 dark:text-gray-400 max-w-3xl mx-auto mt-2">
-                    Esta imagen es una llave visual para tu subconsciente. Edítala, medita en ella y repite tu afirmación.
+                    {t.resultDescription}
                 </p>
             </div>
             
@@ -50,7 +52,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = memo(({ image, onBack, isFro
                 <div className="w-full max-w-lg flex-shrink-0">
                     <img 
                         src={optimizedImageUrl} 
-                        alt="Imagen subconsciente generada" 
+                        alt="Generated subconscious image" 
                         className="rounded-xl shadow-2xl shadow-purple-300/50 dark:shadow-purple-900/50 w-full aspect-square object-cover border-4 border-purple-300 dark:border-purple-500/30"
                         loading="eager"
                     />
@@ -66,7 +68,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = memo(({ image, onBack, isFro
 
                 {/* Affirmation */}
                 <div className="w-full mt-4">
-                    <SectionHeader>Afirmación de Poder</SectionHeader>
+                    <SectionHeader>{t.affirmationTitle}</SectionHeader>
                     <div className="bg-gradient-to-r from-purple-100 to-indigo-100 dark:from-purple-600/30 dark:to-indigo-600/30 p-4 rounded-lg border border-purple-300 dark:border-purple-400/50">
                        <p className="text-lg font-semibold text-gray-900 dark:text-white italic">"{image.affirmation}"</p>
                     </div>
@@ -74,7 +76,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = memo(({ image, onBack, isFro
 
                 {/* Analysis */}
                 <div className="w-full mt-6 text-left">
-                    <SectionHeader className="text-center md:text-left">Análisis Simbólico</SectionHeader>
+                    <SectionHeader className="text-center md:text-left">{t.analysisTitle}</SectionHeader>
                     <div className="bg-gray-100 dark:bg-gray-800/50 p-6 rounded-lg border border-gray-200 dark:border-purple-500/30">
                         <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{image.analysis}</p>
                     </div>
@@ -86,7 +88,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = memo(({ image, onBack, isFro
                     onClick={onBack}
                     className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold py-3 px-8 rounded-full text-lg transition-transform transform hover:scale-105 duration-300 shadow-lg shadow-purple-500/50 w-full sm:w-auto"
                 >
-                    {isFromHistory ? 'Volver a Mis Símbolos' : 'Crear Otro Símbolo'}
+                    {isFromHistory ? t.backToSymbols : t.createAnother}
                 </button>
                 
                 {/* Share button with dropdown menu */}
@@ -100,7 +102,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = memo(({ image, onBack, isFro
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <span>Inmersión Profunda</span>
+                    <span>{t.deepImmersion}</span>
                 </button>
             </div>
         </div>

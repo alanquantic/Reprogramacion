@@ -1,11 +1,15 @@
 import React, { useReducer, useEffect, useCallback, useState, Suspense, lazy } from 'react';
 import { AppStatus, ReprogramArea, GeneratedImage, Scenario, AppState, AppAction, LoadingStep } from './types';
 import ThemeSwitcher from './components/ThemeSwitcher';
-import { generateSubconsciousImage, generateCustomImage, generateSymbolicAnalysis, generateAffirmationText, editImageWithPrompt, generateAnalysisNarration } from './services/geminiService';
+import LanguageSwitcher from './components/LanguageSwitcher';
+import { useLanguage } from './contexts/LanguageContext';
+import { generateSubconsciousImage, generateCustomImage, generateSymbolicAnalysis, generateAffirmationText, editImageWithPrompt } from './services/geminiService';
+import { generateAnalysisNarration } from './services/elevenlabsService';
 import { initStorage, getHistory, saveToHistory, deleteFromHistory, updateHistoryItem, getSetting, saveSetting } from './services/storageService';
 import { getBackgroundMusic } from './services/musicService';
 import { canProceed, recordRequest, getTimeUntilReset, RATE_LIMITS } from './services/rateLimiter';
 import { preloadMusicForArea } from './utils/audioPreloader';
+import { getScenarioTitle } from './constants';
 
 // Lazy load components for code splitting
 const WelcomeScreen = lazy(() => import('./components/WelcomeScreen'));
@@ -14,6 +18,7 @@ const LoadingScreen = lazy(() => import('./components/LoadingScreen'));
 const ResultDisplay = lazy(() => import('./components/ResultDisplay'));
 const HistoryScreen = lazy(() => import('./components/HistoryScreen'));
 const Onboarding = lazy(() => import('./components/Onboarding'));
+const QuotaMonitor = lazy(() => import('./components/QuotaMonitor'));
 
 // Loading fallback component
 const LoadingFallback: React.FC = () => (
@@ -140,27 +145,31 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
 }
 
-/**
- * Checks rate limits and throws descriptive error if exceeded
- */
-function checkRateLimits(): void {
-    const checks = [
-        { key: 'image-generation', config: RATE_LIMITS.IMAGE_GENERATION, name: 'generación de imágenes' },
-        { key: 'tts-generation', config: RATE_LIMITS.TTS_GENERATION, name: 'síntesis de voz' },
-    ];
-
-    for (const check of checks) {
-        if (!canProceed(check.key, check.config)) {
-            const waitTime = Math.ceil(getTimeUntilReset(check.key, check.config) / 1000);
-            throw new Error(`Límite de ${check.name} alcanzado. Por favor espera ${waitTime} segundos antes de intentar de nuevo.`);
-        }
-    }
-}
-
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
+    const { language, t } = useLanguage();
     const [state, dispatch] = useReducer(appReducer, initialState);
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
+
+    /**
+     * Checks rate limits and throws descriptive error if exceeded
+     */
+    const checkRateLimits = useCallback((): void => {
+        const checks = [
+            { key: 'image-generation', config: RATE_LIMITS.IMAGE_GENERATION, name: language === 'es' ? 'generación de imágenes' : 'image generation' },
+            { key: 'tts-generation', config: RATE_LIMITS.TTS_GENERATION, name: language === 'es' ? 'síntesis de voz' : 'voice synthesis' },
+        ];
+
+        for (const check of checks) {
+            if (!canProceed(check.key, check.config)) {
+                const waitTime = Math.ceil(getTimeUntilReset(check.key, check.config) / 1000);
+                const errorMsg = t.errorRateLimit
+                    .replace('{type}', check.name)
+                    .replace('{seconds}', String(waitTime));
+                throw new Error(errorMsg);
+            }
+        }
+    }, [language, t]);
 
     // Initialize IndexedDB and load data
     useEffect(() => {
@@ -225,28 +234,31 @@ const App: React.FC = () => {
             // Check rate limits before proceeding
             checkRateLimits();
 
+            // Get translated scenario title for display
+            const scenarioTitle = getScenarioTitle(scenario.id, t);
+
             // Step 1 & 2: Generate image AND analysis in PARALLEL for better performance
             currentStep = 'image';
             dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
             
             recordRequest('image-generation');
             const [imageUrl, analysis] = await Promise.all([
-                generateSubconsciousImage(scenario.prompt),
-                generateSymbolicAnalysis(scenario.title, scenario.prompt, gender),
+                generateSubconsciousImage(scenario.prompt, language),
+                generateSymbolicAnalysis(scenarioTitle, scenario.prompt, gender, language),
             ]);
             
             // Step 3: Generate affirmation text (fast, no audio generation)
             currentStep = 'analysis';
             dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
-            const affirmationText = await generateAffirmationText(analysis, gender);
+            const affirmationText = await generateAffirmationText(analysis, gender, language);
 
-            // Step 4 & 5: Generate narration AND load music in PARALLEL for speed
+            // Step 4 & 5: Generate narration (ElevenLabs) AND load music in PARALLEL for speed
             currentStep = 'narration';
             dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
             recordRequest('tts-generation');
             
             const [analysisAudioData, backgroundMusicData] = await Promise.all([
-                generateAnalysisNarration(analysis, gender),
+                generateAnalysisNarration(analysis, gender, language),
                 getBackgroundMusic(area),
             ]);
 
@@ -255,7 +267,7 @@ const App: React.FC = () => {
                 timestamp: Date.now(),
                 url: imageUrl,
                 prompt: scenario.prompt,
-                scenarioTitle: scenario.title,
+                scenarioTitle: scenarioTitle,
                 area: area,
                 gender: gender,
                 analysis: analysis,
@@ -275,10 +287,12 @@ const App: React.FC = () => {
             console.error(err);
             const errorMessage = err instanceof Error 
                 ? err.message 
-                : `No se pudo completar el paso: '${currentStep}'. Por favor, intenta de nuevo.`;
+                : language === 'es' 
+                    ? `No se pudo completar el paso: '${currentStep}'. Por favor, intenta de nuevo.`
+                    : `Could not complete step: '${currentStep}'. Please try again.`;
             dispatch({ type: 'GENERATION_FAILURE', payload: errorMessage });
         }
-    }, [state.userInput.gender, state.userInput.area]);
+    }, [state.userInput.gender, state.userInput.area, language, t, checkRateLimits]);
 
     const handleGenerateCustom = useCallback(async (prompt: string) => {
         const { gender, area } = state.userInput;
@@ -291,7 +305,7 @@ const App: React.FC = () => {
             // Check rate limits before proceeding
             checkRateLimits();
 
-            const scenarioTitle = "Símbolo Personalizado";
+            const scenarioTitle = t.customScenarioTitle;
 
             // Step 1 & 2: Generate image AND analysis in PARALLEL
             currentStep = 'image';
@@ -299,22 +313,22 @@ const App: React.FC = () => {
             
             recordRequest('image-generation');
             const [imageUrl, analysis] = await Promise.all([
-                generateCustomImage(prompt),
-                generateSymbolicAnalysis(scenarioTitle, prompt, gender),
+                generateCustomImage(prompt, language),
+                generateSymbolicAnalysis(scenarioTitle, prompt, gender, language),
             ]);
             
             // Step 3: Generate affirmation text (fast, no audio generation)
             currentStep = 'analysis';
             dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
-            const affirmationText = await generateAffirmationText(analysis, gender);
+            const affirmationText = await generateAffirmationText(analysis, gender, language);
 
-            // Step 4 & 5: Generate narration AND load music in PARALLEL for speed
+            // Step 4 & 5: Generate narration (ElevenLabs) AND load music in PARALLEL for speed
             currentStep = 'narration';
             dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
             recordRequest('tts-generation');
             
             const [analysisAudioData, backgroundMusicData] = await Promise.all([
-                generateAnalysisNarration(analysis, gender),
+                generateAnalysisNarration(analysis, gender, language),
                 getBackgroundMusic(area),
             ]);
 
@@ -343,16 +357,19 @@ const App: React.FC = () => {
             console.error(err);
             const errorMessage = err instanceof Error 
                 ? err.message 
-                : `No se pudo completar el paso: '${currentStep}'. Por favor, intenta de nuevo.`;
+                : language === 'es'
+                    ? `No se pudo completar el paso: '${currentStep}'. Por favor, intenta de nuevo.`
+                    : `Could not complete step: '${currentStep}'. Please try again.`;
             dispatch({ type: 'GENERATION_FAILURE', payload: errorMessage });
         }
-    }, [state.userInput.gender, state.userInput.area]);
+    }, [state.userInput.gender, state.userInput.area, language, t, checkRateLimits]);
     
     const handleEditImage = useCallback(async (imageToEdit: GeneratedImage, prompt: string) => {
         // Check rate limit for image editing
         if (!canProceed('image-edit', RATE_LIMITS.IMAGE_EDIT)) {
             const waitTime = Math.ceil(getTimeUntilReset('image-edit', RATE_LIMITS.IMAGE_EDIT) / 1000);
-            dispatch({ type: 'EDIT_IMAGE_FAILURE', payload: `Límite de edición alcanzado. Espera ${waitTime} segundos.` });
+            const errorMsg = t.errorWaitSeconds.replace('{seconds}', String(waitTime));
+            dispatch({ type: 'EDIT_IMAGE_FAILURE', payload: errorMsg });
             return;
         }
 
@@ -372,9 +389,9 @@ const App: React.FC = () => {
             dispatch({ type: 'EDIT_IMAGE_SUCCESS', payload: { imageId: imageToEdit.id, newUrl: newImageUrl }});
         } catch (err: unknown) {
             console.error(err);
-            dispatch({ type: 'EDIT_IMAGE_FAILURE', payload: 'No se pudo editar la imagen. Intenta de nuevo.' });
+            dispatch({ type: 'EDIT_IMAGE_FAILURE', payload: t.errorImageEdit });
         }
-    }, []);
+    }, [t]);
 
     const renderContent = () => {
         switch (state.status) {
@@ -405,7 +422,7 @@ const App: React.FC = () => {
                     history={state.history}
                     onViewItem={(item) => dispatch({ type: 'VIEW_HISTORY_ITEM', payload: item })}
                     onDeleteItem={async (id) => {
-                        if (window.confirm('¿Estás seguro de que quieres eliminar este símbolo de tu historial?')) {
+                        if (window.confirm(t.deleteSymbolConfirm)) {
                             await deleteFromHistory(id);
                             dispatch({ type: 'DELETE_HISTORY_ITEM', payload: id });
                         }
@@ -415,13 +432,13 @@ const App: React.FC = () => {
             case AppStatus.Error:
                 return (
                     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] text-center p-4 animate-fade-in">
-                        <h2 className="text-3xl md:text-4xl font-bold text-red-600 dark:text-red-400 mb-4 animate-fade-in-down">Ocurrió un Error</h2>
+                        <h2 className="text-3xl md:text-4xl font-bold text-red-600 dark:text-red-400 mb-4 animate-fade-in-down">{t.errorTitle}</h2>
                         <p className="text-gray-600 dark:text-gray-300 mb-8 max-w-md animate-fade-in-up">{state.error}</p>
                         <button
                             onClick={() => dispatch({ type: 'RETRY_FROM_ERROR' })}
                             className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-8 rounded-full text-lg transition-transform transform hover:scale-105 duration-300 shadow-lg shadow-purple-500/50"
                         >
-                           Intentar de Nuevo
+                           {t.errorRetry}
                         </button>
                     </div>
                 );
@@ -436,7 +453,7 @@ const App: React.FC = () => {
             <div className="min-h-screen bg-white dark:bg-gradient-to-br dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900 flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-purple-600 dark:text-purple-300">Cargando...</p>
+                    <p className="text-purple-600 dark:text-purple-300">{t.loading}</p>
                 </div>
             </div>
         );
@@ -452,14 +469,15 @@ const App: React.FC = () => {
             )}
 
             <header className="p-4 flex justify-between items-center">
-                <h1 className="text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500">Reprogramación Visual</h1>
-                <div className="flex items-center gap-4">
+                <h1 className="text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500">{t.appTitle}</h1>
+                <div className="flex items-center gap-3">
                     {state.status !== AppStatus.Welcome && (
-                        <button onClick={() => dispatch({ type: 'START_OVER' })} className="text-sm text-purple-600 hover:text-purple-800 dark:text-purple-300 dark:hover:text-purple-100 transition-colors">Inicio</button>
+                        <button onClick={() => dispatch({ type: 'START_OVER' })} className="text-sm text-purple-600 hover:text-purple-800 dark:text-purple-300 dark:hover:text-purple-100 transition-colors">{t.home}</button>
                     )}
                     {state.status !== AppStatus.Welcome && state.status !== AppStatus.History && state.history.length > 0 && (
-                        <button onClick={() => dispatch({ type: 'VIEW_HISTORY' })} className="text-sm text-purple-600 hover:text-purple-800 dark:text-purple-300 dark:hover:text-purple-100 transition-colors">Mis Símbolos</button>
+                        <button onClick={() => dispatch({ type: 'VIEW_HISTORY' })} className="text-sm text-purple-600 hover:text-purple-800 dark:text-purple-300 dark:hover:text-purple-100 transition-colors">{t.mySymbols}</button>
                     )}
+                    <LanguageSwitcher />
                     <ThemeSwitcher />
                 </div>
             </header>
@@ -468,8 +486,17 @@ const App: React.FC = () => {
                     {renderContent()}
                 </Suspense>
             </main>
+            
+            {/* Floating quota monitor for ElevenLabs API usage */}
+            <Suspense fallback={null}>
+                <QuotaMonitor visible={true} />
+            </Suspense>
         </div>
     );
+};
+
+const App: React.FC = () => {
+    return <AppContent />;
 };
 
 export default App;

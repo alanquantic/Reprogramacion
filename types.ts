@@ -15,6 +15,7 @@ export enum AppStatus {
 export type FormStep = 'area' | 'scenario';
 export type LoadingStep = 'prompt' | 'image' | 'analysis' | 'narration' | 'music' | null;
 export type Gender = 'male' | 'female' | 'neutral';
+export type Language = 'es' | 'en';
 
 export enum ReprogramArea {
     Physical = 'FÍSICO',

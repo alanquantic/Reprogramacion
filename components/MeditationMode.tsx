@@ -1,39 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { GeneratedImage } from '../types';
+import { useLanguage } from '../contexts/LanguageContext';
 
 type MeditationPhase = 'breathing' | 'meditation' | 'conclusion';
-
-/**
- * Decodes a base64 string into a Uint8Array.
- */
-function decode(base64: string): Uint8Array {
-    const binaryString = atob(base64);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes;
-}
-
-/**
- * Decodes raw PCM audio data into an AudioBuffer for playback (for Gemini TTS/Music).
- */
-async function decodePcmAudioData(
-    data: Uint8Array,
-    ctx: AudioContext,
-): Promise<AudioBuffer> {
-    const sampleRate = 24000;
-    const numChannels = 1;
-    const dataInt16 = new Int16Array(data.buffer);
-    const frameCount = dataInt16.length;
-    const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-    const channelData = buffer.getChannelData(0);
-    for (let i = 0; i < frameCount; i++) {
-        channelData[i] = dataInt16[i] / 32768.0;
-    }
-    return buffer;
-}
 
 /**
  * Converts base64 to ArrayBuffer for MP3 decoding (for ElevenLabs audio).
@@ -51,12 +20,13 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
 interface SubtitleDisplayProps {
     text: string;
     isVisible: boolean;
+    subtitlesLabel: string;
 }
 
 /**
  * Component to display subtitles with accessibility support
  */
-const SubtitleDisplay: React.FC<SubtitleDisplayProps> = memo(({ text, isVisible }) => {
+const SubtitleDisplay: React.FC<SubtitleDisplayProps> = memo(({ text, isVisible, subtitlesLabel }) => {
     if (!isVisible || !text) return null;
     
     return (
@@ -64,7 +34,7 @@ const SubtitleDisplay: React.FC<SubtitleDisplayProps> = memo(({ text, isVisible 
             className="absolute bottom-24 left-4 right-4 mx-auto max-w-2xl"
             role="region"
             aria-live="polite"
-            aria-label="Subtítulos"
+            aria-label={subtitlesLabel}
         >
             <div className="bg-black/70 backdrop-blur-sm rounded-lg px-6 py-4 text-center">
                 <p className="text-white text-lg md:text-xl leading-relaxed">
@@ -84,20 +54,16 @@ interface ProgressBarProps {
     progress: number; // 0-100
     phase: MeditationPhase;
     isPaused: boolean;
+    phaseLabels: Record<MeditationPhase, string>;
+    pausedLabel: string;
 }
 
-const ProgressBar: React.FC<ProgressBarProps> = memo(({ progress, phase, isPaused }) => {
-    const phaseLabels: Record<MeditationPhase, string> = {
-        breathing: 'Respiración',
-        meditation: 'Meditación',
-        conclusion: 'Cierre',
-    };
-
+const ProgressBar: React.FC<ProgressBarProps> = memo(({ progress, phase, isPaused, phaseLabels, pausedLabel }) => {
     return (
         <div className="absolute bottom-4 left-4 right-4 mx-auto max-w-md">
             <div className="flex items-center justify-between text-sm text-white/70 mb-2">
                 <span>{phaseLabels[phase]}</span>
-                <span>{isPaused ? 'Pausado' : `${Math.round(progress)}%`}</span>
+                <span>{isPaused ? pausedLabel : `${Math.round(progress)}%`}</span>
             </div>
             <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
                 <div 
@@ -121,6 +87,9 @@ interface VolumeControlProps {
     onMusicVolumeChange: (volume: number) => void;
     isExpanded: boolean;
     onToggle: () => void;
+    volumeLabel: string;
+    narrationLabel: string;
+    musicLabel: string;
 }
 
 const VolumeControl: React.FC<VolumeControlProps> = memo(({
@@ -130,6 +99,9 @@ const VolumeControl: React.FC<VolumeControlProps> = memo(({
     onMusicVolumeChange,
     isExpanded,
     onToggle,
+    volumeLabel,
+    narrationLabel,
+    musicLabel,
 }) => {
     return (
         <div className="absolute top-16 right-4 z-20">
@@ -139,7 +111,7 @@ const VolumeControl: React.FC<VolumeControlProps> = memo(({
                     onToggle();
                 }}
                 className="text-white bg-black/30 rounded-full p-2 hover:bg-black/60 transition-colors"
-                aria-label="Control de volumen"
+                aria-label={volumeLabel}
             >
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
@@ -153,7 +125,7 @@ const VolumeControl: React.FC<VolumeControlProps> = memo(({
                 >
                     <div className="mb-4">
                         <label className="text-white/80 text-sm block mb-2">
-                            Narración: {Math.round(narrationVolume * 100)}%
+                            {narrationLabel}: {Math.round(narrationVolume * 100)}%
                         </label>
                         <input
                             type="range"
@@ -167,7 +139,7 @@ const VolumeControl: React.FC<VolumeControlProps> = memo(({
                     </div>
                     <div>
                         <label className="text-white/80 text-sm block mb-2">
-                            Música: {Math.round(musicVolume * 100)}%
+                            {musicLabel}: {Math.round(musicVolume * 100)}%
                         </label>
                         <input
                             type="range"
@@ -193,15 +165,33 @@ interface PhaseContentProps {
     imageUrl: string;
     isNarrating: boolean;
     isPaused: boolean;
+    prepareText: string;
+    breatheText: string;
+    listeningText: string;
+    pausedText: string;
+    completeText: string;
+    completeDescText: string;
 }
 
-const PhaseContent: React.FC<PhaseContentProps> = memo(({ phase, affirmation, imageUrl, isNarrating, isPaused }) => {
+const PhaseContent: React.FC<PhaseContentProps> = memo(({ 
+    phase, 
+    affirmation, 
+    imageUrl, 
+    isNarrating, 
+    isPaused,
+    prepareText,
+    breatheText,
+    listeningText,
+    pausedText,
+    completeText,
+    completeDescText,
+}) => {
     switch (phase) {
         case 'breathing':
             return (
                 <div className="text-center animate-fade-in">
-                    <h3 className="text-2xl md:text-3xl font-bold text-white">Prepárate para la Inmersión</h3>
-                    <p className="text-lg text-purple-300 mt-2">Respira profundamente. Inhala calma, exhala tensión.</p>
+                    <h3 className="text-2xl md:text-3xl font-bold text-white">{prepareText}</h3>
+                    <p className="text-lg text-purple-300 mt-2">{breatheText}</p>
                     <div className="mt-8 relative w-48 h-48 flex items-center justify-center mx-auto">
                         <div className={`absolute inset-0 bg-purple-500 rounded-full opacity-50 ${isPaused ? '' : 'animate-pulse-soft'}`}></div>
                         <div className={`absolute w-3/4 h-3/4 bg-purple-700 rounded-full ${isPaused ? '' : 'animate-breathing-circle'}`}></div>
@@ -213,7 +203,7 @@ const PhaseContent: React.FC<PhaseContentProps> = memo(({ phase, affirmation, im
                 <div className="flex flex-col items-center justify-center animate-fade-in">
                     <img
                         src={imageUrl}
-                        alt="Símbolo de meditación"
+                        alt="Meditation symbol"
                         className={`rounded-xl shadow-2xl shadow-purple-900/80 w-full max-w-md aspect-square object-cover border-4 border-purple-500/50 ${isPaused ? '' : 'animate-breathing-image'}`}
                     />
                     <div className="mt-8 max-w-lg text-center">
@@ -221,7 +211,7 @@ const PhaseContent: React.FC<PhaseContentProps> = memo(({ phase, affirmation, im
                             <div className="flex items-center justify-center gap-2">
                                 <div className={`w-2 h-2 bg-purple-400 rounded-full ${isPaused ? '' : 'animate-pulse'}`}></div>
                                 <p className="text-lg text-purple-300">
-                                    {isPaused ? 'Narración pausada...' : 'Escuchando análisis simbólico...'}
+                                    {isPaused ? pausedText : listeningText}
                                 </p>
                                 <div className={`w-2 h-2 bg-purple-400 rounded-full ${isPaused ? '' : 'animate-pulse'}`}></div>
                             </div>
@@ -234,8 +224,8 @@ const PhaseContent: React.FC<PhaseContentProps> = memo(({ phase, affirmation, im
         case 'conclusion':
             return (
                 <div className="text-center animate-fade-in">
-                    <h3 className="text-2xl md:text-3xl font-bold text-white">Integración Completa</h3>
-                    <p className="text-lg text-purple-300 mt-2">La sesión está terminando. Vuelve lentamente a tu estado presente.</p>
+                    <h3 className="text-2xl md:text-3xl font-bold text-white">{completeText}</h3>
+                    <p className="text-lg text-purple-300 mt-2">{completeDescText}</p>
                 </div>
             );
         default:
@@ -251,6 +241,7 @@ interface MeditationModeProps {
 }
 
 const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
+    const { t } = useLanguage();
     const [phase, setPhase] = useState<MeditationPhase>('breathing');
     const [audioError, setAudioError] = useState<string | null>(null);
     const [isNarrating, setIsNarrating] = useState(false);
@@ -268,6 +259,7 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
     const musicSourceRef = useRef<AudioBufferSourceNode | null>(null);
     const musicGainRef = useRef<GainNode | null>(null);
     const narrationGainRef = useRef<GainNode | null>(null);
+    const narrationSourceRef = useRef<AudioBufferSourceNode | null>(null);
     const sequenceStartedRef = useRef(false);
     const isClosingRef = useRef(false);
     const isPausedRef = useRef(false);
@@ -276,6 +268,13 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
     // Phase durations in ms
     const BREATHING_DURATION = 8000;
     const CONCLUSION_DURATION = 5000;
+
+    // Phase labels for progress bar
+    const phaseLabels: Record<MeditationPhase, string> = {
+        breathing: t.meditationPhaseBreathing,
+        meditation: t.meditationPhaseMeditation,
+        conclusion: t.meditationPhaseConclusion,
+    };
 
     // Update ref when state changes
     useEffect(() => {
@@ -379,9 +378,12 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
         }
     }, [getAudioContext]);
 
-    const playPcmAudio = useCallback(async (base64Data: string | undefined, volume: number = 0.6): Promise<void> => {
+    /**
+     * Play MP3 audio from base64 data (for ElevenLabs narration)
+     */
+    const playMp3Audio = useCallback(async (base64Data: string | undefined, volume: number = 0.6): Promise<void> => {
         if (!base64Data) {
-            console.warn("[MeditationMode] No PCM audio data provided.");
+            console.warn("[MeditationMode] No MP3 audio data provided.");
             return;
         }
 
@@ -394,12 +396,12 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
                 await audioCtx.resume();
             }
 
-            console.log("[MeditationMode] Decoding PCM audio (Gemini TTS), length:", base64Data.length);
+            console.log("[MeditationMode] Decoding MP3 audio (ElevenLabs), length:", base64Data.length);
             
-            const decodedBytes = decode(base64Data);
-            const audioBuffer = await decodePcmAudioData(decodedBytes, audioCtx);
+            const arrayBuffer = base64ToArrayBuffer(base64Data);
+            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
             
-            console.log("[MeditationMode] Playing PCM audio, duration:", audioBuffer.duration.toFixed(2), "s, volume:", volume);
+            console.log("[MeditationMode] Playing MP3 audio, duration:", audioBuffer.duration.toFixed(2), "s, volume:", volume);
             
             return new Promise<void>((resolve) => {
                 const source = audioCtx.createBufferSource();
@@ -408,19 +410,21 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
                 const gainNode = audioCtx.createGain();
                 gainNode.gain.value = volume;
                 narrationGainRef.current = gainNode;
+                narrationSourceRef.current = source;
                 
                 source.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
                 
                 source.onended = () => {
-                    console.log("[MeditationMode] PCM audio playback ended.");
+                    console.log("[MeditationMode] MP3 audio playback ended.");
                     narrationGainRef.current = null;
+                    narrationSourceRef.current = null;
                     resolve();
                 };
                 source.start();
             });
         } catch (err) {
-            console.error("[MeditationMode] Failed to play PCM audio:", err);
+            console.error("[MeditationMode] Failed to play MP3 audio:", err);
         }
     }, [getAudioContext]);
 
@@ -467,6 +471,14 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
         if (musicSourceRef.current) {
             try {
                 musicSourceRef.current.stop();
+            } catch {
+                // Already stopped
+            }
+        }
+
+        if (narrationSourceRef.current) {
+            try {
+                narrationSourceRef.current.stop();
             } catch {
                 // Already stopped
             }
@@ -524,10 +536,10 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
 
         const audioCtx = getAudioContext();
         if (!audioCtx) {
-            setAudioError("Tu navegador no soporta la reproducción de audio.");
+            setAudioError(t.errorAudioNotSupported);
         } else if (audioCtx.state === 'suspended') {
             audioCtx.resume().catch(() => {
-                setAudioError("Haz click en la pantalla para activar el audio.");
+                setAudioError(t.errorClickToActivate);
             });
         }
 
@@ -562,8 +574,8 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
                 const estimatedDuration = Math.max(10000, (image.analysis.length / 150) * 1000);
                 startProgressTracking(estimatedDuration, 20, 90);
                 
-                console.log("[MeditationMode] Starting analysis narration...");
-                await playPcmAudio(image.analysisAudioData, narrationVolume);
+                console.log("[MeditationMode] Starting analysis narration (ElevenLabs MP3)...");
+                await playMp3Audio(image.analysisAudioData, narrationVolume);
                 console.log("[MeditationMode] Analysis narration completed");
                 setIsNarrating(false);
                 setCurrentSubtitle('');
@@ -601,7 +613,7 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
             onClick={handleScreenClick}
             role="dialog"
             aria-modal="true"
-            aria-label="Modo meditación"
+            aria-label="Meditation mode"
         >
             {/* Close button */}
             <button
@@ -610,7 +622,7 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
                     handleClose();
                 }}
                 className="absolute top-4 right-4 text-white bg-black/30 rounded-full p-2 hover:bg-black/60 transition-colors z-20"
-                aria-label="Cerrar meditación"
+                aria-label={t.meditationCloseLabel}
             >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -624,7 +636,7 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
                     handlePauseResume();
                 }}
                 className="absolute top-4 left-1/2 -translate-x-1/2 text-white bg-black/30 rounded-full p-3 hover:bg-black/60 transition-colors z-20"
-                aria-label={isPaused ? "Reanudar meditación" : "Pausar meditación"}
+                aria-label={isPaused ? t.meditationResumeLabel : t.meditationPauseLabel}
             >
                 {isPaused ? (
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -645,7 +657,7 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
                     setShowSubtitles(!showSubtitles);
                 }}
                 className="absolute top-4 left-4 text-white bg-black/30 rounded-full px-3 py-2 hover:bg-black/60 transition-colors z-20 text-sm flex items-center gap-2"
-                aria-label={showSubtitles ? "Ocultar subtítulos" : "Mostrar subtítulos"}
+                aria-label={t.meditationSubtitlesLabel}
             >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
@@ -661,6 +673,9 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
                 onMusicVolumeChange={setMusicVolume}
                 isExpanded={showVolumeControl}
                 onToggle={() => setShowVolumeControl(!showVolumeControl)}
+                volumeLabel={t.meditationVolumeLabel}
+                narrationLabel={t.meditationNarrationVolume}
+                musicLabel={t.meditationMusicVolume}
             />
             
             {/* Audio error message */}
@@ -677,12 +692,19 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
                 imageUrl={image.url}
                 isNarrating={isNarrating}
                 isPaused={isPaused}
+                prepareText={t.meditationPrepare}
+                breatheText={t.meditationBreathe}
+                listeningText={t.meditationListening}
+                pausedText={t.meditationPaused}
+                completeText={t.meditationComplete}
+                completeDescText={t.meditationCompleteDesc}
             />
             
             {/* Subtitles */}
             <SubtitleDisplay 
                 text={currentSubtitle}
                 isVisible={showSubtitles && isNarrating}
+                subtitlesLabel={t.meditationSubtitlesLabel}
             />
 
             {/* Progress bar */}
@@ -690,6 +712,8 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
                 progress={progress}
                 phase={phase}
                 isPaused={isPaused}
+                phaseLabels={phaseLabels}
+                pausedLabel={t.meditationPaused}
             />
         </div>
     );
