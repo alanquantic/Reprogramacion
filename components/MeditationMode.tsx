@@ -5,7 +5,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 type MeditationPhase = 'breathing' | 'meditation' | 'conclusion';
 
 /**
- * Converts base64 to ArrayBuffer for MP3 decoding (for ElevenLabs audio).
+ * Converts base64 to ArrayBuffer for audio decoding.
  */
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
     const binaryString = atob(base64);
@@ -15,6 +15,61 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
         bytes[i] = binaryString.charCodeAt(i);
     }
     return bytes.buffer;
+}
+
+/**
+ * Converts raw PCM audio data (from Gemini TTS) to WAV format.
+ * Gemini TTS returns: 24kHz, 16-bit, mono PCM audio
+ */
+function pcmToWav(pcmData: ArrayBuffer): ArrayBuffer {
+    const sampleRate = 24000;  // Gemini TTS outputs 24kHz
+    const numChannels = 1;     // Mono
+    const bitsPerSample = 16;  // 16-bit
+    const bytesPerSample = bitsPerSample / 8;
+    const blockAlign = numChannels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+    const dataSize = pcmData.byteLength;
+    const headerSize = 44;
+    const totalSize = headerSize + dataSize;
+
+    const buffer = new ArrayBuffer(totalSize);
+    const view = new DataView(buffer);
+
+    // Write WAV header
+    // "RIFF" chunk descriptor
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, totalSize - 8, true);  // File size - 8
+    writeString(view, 8, 'WAVE');
+
+    // "fmt " sub-chunk
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);            // Subchunk1Size (16 for PCM)
+    view.setUint16(20, 1, true);             // AudioFormat (1 = PCM)
+    view.setUint16(22, numChannels, true);   // NumChannels
+    view.setUint32(24, sampleRate, true);    // SampleRate
+    view.setUint32(28, byteRate, true);      // ByteRate
+    view.setUint16(32, blockAlign, true);    // BlockAlign
+    view.setUint16(34, bitsPerSample, true); // BitsPerSample
+
+    // "data" sub-chunk
+    writeString(view, 36, 'data');
+    view.setUint32(40, dataSize, true);      // Subchunk2Size
+
+    // Copy PCM data
+    const pcmBytes = new Uint8Array(pcmData);
+    const wavBytes = new Uint8Array(buffer);
+    wavBytes.set(pcmBytes, headerSize);
+
+    return buffer;
+}
+
+/**
+ * Helper to write string to DataView
+ */
+function writeString(view: DataView, offset: number, str: string): void {
+    for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+    }
 }
 
 interface SubtitleDisplayProps {
@@ -379,11 +434,11 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
     }, [getAudioContext]);
 
     /**
-     * Play MP3 audio from base64 data (for ElevenLabs narration)
+     * Play audio from base64 data (Google Cloud TTS returns MP3 format)
      */
-    const playMp3Audio = useCallback(async (base64Data: string | undefined, volume: number = 0.6): Promise<void> => {
+    const playNarrationAudio = useCallback(async (base64Data: string | undefined, volume: number = 0.6): Promise<void> => {
         if (!base64Data) {
-            console.warn("[MeditationMode] No MP3 audio data provided.");
+            console.warn("[MeditationMode] No audio data provided.");
             return;
         }
 
@@ -396,12 +451,16 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
                 await audioCtx.resume();
             }
 
-            console.log("[MeditationMode] Decoding MP3 audio (ElevenLabs), length:", base64Data.length);
+            console.log("[MeditationMode] Processing Cloud TTS audio (MP3), base64 length:", base64Data.length);
             
-            const arrayBuffer = base64ToArrayBuffer(base64Data);
-            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            // Convert base64 to ArrayBuffer (MP3 from Google Cloud TTS)
+            const mp3Data = base64ToArrayBuffer(base64Data);
+            console.log("[MeditationMode] MP3 data size:", mp3Data.byteLength, "bytes");
             
-            console.log("[MeditationMode] Playing MP3 audio, duration:", audioBuffer.duration.toFixed(2), "s, volume:", volume);
+            // Decode MP3 audio directly (Web Audio API supports MP3)
+            const audioBuffer = await audioCtx.decodeAudioData(mp3Data);
+            
+            console.log("[MeditationMode] Playing narration audio, duration:", audioBuffer.duration.toFixed(2), "s, volume:", volume);
             
             return new Promise<void>((resolve) => {
                 const source = audioCtx.createBufferSource();
@@ -416,7 +475,7 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
                 gainNode.connect(audioCtx.destination);
                 
                 source.onended = () => {
-                    console.log("[MeditationMode] MP3 audio playback ended.");
+                    console.log("[MeditationMode] Narration audio playback ended.");
                     narrationGainRef.current = null;
                     narrationSourceRef.current = null;
                     resolve();
@@ -424,7 +483,7 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
                 source.start();
             });
         } catch (err) {
-            console.error("[MeditationMode] Failed to play MP3 audio:", err);
+            console.error("[MeditationMode] Failed to play narration audio:", err);
         }
     }, [getAudioContext]);
 
@@ -574,8 +633,8 @@ const MeditationMode: React.FC<MeditationModeProps> = ({ image, onClose }) => {
                 const estimatedDuration = Math.max(10000, (image.analysis.length / 150) * 1000);
                 startProgressTracking(estimatedDuration, 20, 90);
                 
-                console.log("[MeditationMode] Starting analysis narration (ElevenLabs MP3)...");
-                await playMp3Audio(image.analysisAudioData, narrationVolume);
+                console.log("[MeditationMode] Starting analysis narration (Gemini TTS)...");
+                await playNarrationAudio(image.analysisAudioData, narrationVolume);
                 console.log("[MeditationMode] Analysis narration completed");
                 setIsNarrating(false);
                 setCurrentSubtitle('');

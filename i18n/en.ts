@@ -172,13 +172,19 @@ export const en: Translations = {
     quotaError: 'Error loading',
     quotaRefresh: 'Refresh',
     
-    // Content Language Selection Step
-    contentLangStepTitle: 'What language do you want for your experience?',
-    contentLangStepDescription: 'Choose the language for generated text and voice narration',
-    contentLangSpanish: 'Español',
-    contentLangSpanishDesc: 'Texto y narración en español latinoamericano',
-    contentLangEnglish: 'English',
-    contentLangEnglishDesc: 'Text and narration in English',
-    contentLangContinue: 'Continue',
+    // Language Selection Screen (Initial)
+    langSelectTitle: 'What language do you want for your experience?',
+    langSelectDescription: 'This will affect the interface, generated text and voice narration',
+    langSelectSpanish: 'Español',
+    langSelectSpanishDesc: 'Interfaz y contenido en español latinoamericano',
+    langSelectEnglish: 'English',
+    langSelectEnglishDesc: 'Interface and content in English',
+    
+    // User Name Input
+    nameInputLabel: 'What is your name?',
+    nameInputPlaceholder: 'Enter your name...',
+    nameInputDescription: 'Your name will make the experience more personal',
+    continueButton: 'Continue →',
+    backButton: '← Back',
 };
 

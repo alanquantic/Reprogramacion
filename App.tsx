@@ -1,10 +1,10 @@
 import React, { useReducer, useEffect, useCallback, useState, Suspense, lazy } from 'react';
-import { AppStatus, ReprogramArea, GeneratedImage, Scenario, AppState, AppAction, LoadingStep } from './types';
+import { AppStatus, ReprogramArea, GeneratedImage, Scenario, AppState, AppAction, LoadingStep, ContentLanguage } from './types';
 import ThemeSwitcher from './components/ThemeSwitcher';
 import LanguageSwitcher from './components/LanguageSwitcher';
 import { useLanguage } from './contexts/LanguageContext';
 import { generateSubconsciousImage, generateCustomImage, generateSymbolicAnalysis, generateAffirmationText, editImageWithPrompt } from './services/geminiService';
-import { generateAnalysisNarration } from './services/elevenlabsService';
+import { generateAnalysisNarration } from './services/googleCloudTtsService';
 import { initStorage, getHistory, saveToHistory, deleteFromHistory, updateHistoryItem, getSetting, saveSetting } from './services/storageService';
 import { getBackgroundMusic } from './services/musicService';
 import { canProceed, recordRequest, getTimeUntilReset, RATE_LIMITS } from './services/rateLimiter';
@@ -18,7 +18,9 @@ const LoadingScreen = lazy(() => import('./components/LoadingScreen'));
 const ResultDisplay = lazy(() => import('./components/ResultDisplay'));
 const HistoryScreen = lazy(() => import('./components/HistoryScreen'));
 const Onboarding = lazy(() => import('./components/Onboarding'));
-const QuotaMonitor = lazy(() => import('./components/QuotaMonitor'));
+// QuotaMonitor disabled while using Gemini TTS (no quota tracking available)
+// const QuotaMonitor = lazy(() => import('./components/QuotaMonitor'));
+const LanguageSelectionScreen = lazy(() => import('./components/LanguageSelectionScreen'));
 
 // Loading fallback component
 const LoadingFallback: React.FC = () => (
@@ -31,9 +33,9 @@ const LAST_SELECTIONS_KEY = 'lastSelections';
 const ONBOARDING_COMPLETE_KEY = 'onboardingComplete';
 
 const initialState: AppState = {
-    status: AppStatus.Welcome,
-    formStep: 'contentLanguage',
-    userInput: { contentLanguage: 'es-latam', area: null, scenario: null, gender: 'neutral' },
+    status: AppStatus.LanguageSelection,
+    formStep: 'name',
+    userInput: { contentLanguage: 'es-latam', userName: '', area: null, scenario: null, gender: 'neutral' },
     generatedImage: null,
     loadingStep: null,
     error: null,
@@ -51,13 +53,19 @@ function appReducer(state: AppState, action: AppAction): AppState {
             return {
                 ...state,
                 status: AppStatus.Input,
-                formStep: 'contentLanguage',
+                formStep: 'name',
                 userInput: { ...state.userInput, area: null, scenario: null, gender: 'neutral' },
                 generatedImage: null,
                 error: null,
             };
         case 'SET_CONTENT_LANGUAGE':
-            return { ...state, userInput: { ...state.userInput, contentLanguage: action.payload } };
+            return { 
+                ...state, 
+                status: AppStatus.Welcome,
+                userInput: { ...state.userInput, contentLanguage: action.payload } 
+            };
+        case 'SET_USER_NAME':
+            return { ...state, userInput: { ...state.userInput, userName: action.payload } };
         case 'SELECT_AREA':
             return { ...state, userInput: { ...state.userInput, area: action.payload }, formStep: 'scenario' };
         case 'SELECT_SCENARIO':
@@ -87,14 +95,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
             return {
                 ...state,
                 status: AppStatus.Input,
-                formStep: 'contentLanguage',
+                formStep: 'name',
                 userInput: { ...state.userInput, area: null, scenario: null, gender: 'neutral' },
                 generatedImage: null,
                 error: null,
                 viewingHistoryItem: null
             };
         case 'START_OVER':
-            return { ...state, status: AppStatus.Welcome, viewingHistoryItem: null, generatedImage: null, error: null };
+            return { ...state, status: AppStatus.LanguageSelection, viewingHistoryItem: null, generatedImage: null, error: null };
         case 'VIEW_HISTORY':
             return { ...state, status: AppStatus.History, viewingHistoryItem: null };
         case 'VIEW_HISTORY_ITEM':
@@ -148,7 +156,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
 }
 
 const AppContent: React.FC = () => {
-    const { language, t } = useLanguage();
+    const { language, setLanguage, t } = useLanguage();
     const [state, dispatch] = useReducer(appReducer, initialState);
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
@@ -226,7 +234,7 @@ const AppContent: React.FC = () => {
     }, []);
 
     const handleGenerate = useCallback(async (scenario: Scenario) => {
-        const { gender, area, contentLanguage } = state.userInput;
+        const { gender, area, contentLanguage, userName } = state.userInput;
         if (!area) return;
         
         dispatch({ type: 'START_GENERATION' });
@@ -246,15 +254,15 @@ const AppContent: React.FC = () => {
             recordRequest('image-generation');
             const [imageUrl, analysis] = await Promise.all([
                 generateSubconsciousImage(scenario.prompt, contentLanguage),
-                generateSymbolicAnalysis(scenarioTitle, scenario.prompt, gender, contentLanguage),
+                generateSymbolicAnalysis(scenarioTitle, scenario.prompt, gender, contentLanguage, userName),
             ]);
             
             // Step 3: Generate affirmation text (fast, no audio generation)
             currentStep = 'analysis';
             dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
-            const affirmationText = await generateAffirmationText(analysis, gender, contentLanguage);
+            const affirmationText = await generateAffirmationText(analysis, gender, contentLanguage, userName);
 
-            // Step 4 & 5: Generate narration (ElevenLabs) AND load music in PARALLEL for speed
+            // Step 4 & 5: Generate narration (Gemini TTS) AND load music in PARALLEL for speed
             currentStep = 'narration';
             dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
             recordRequest('tts-generation');
@@ -294,10 +302,10 @@ const AppContent: React.FC = () => {
                     : `Could not complete step: '${currentStep}'. Please try again.`;
             dispatch({ type: 'GENERATION_FAILURE', payload: errorMessage });
         }
-    }, [state.userInput.gender, state.userInput.area, state.userInput.contentLanguage, t, checkRateLimits]);
+    }, [state.userInput.gender, state.userInput.area, state.userInput.contentLanguage, state.userInput.userName, t, checkRateLimits]);
 
     const handleGenerateCustom = useCallback(async (prompt: string) => {
-        const { gender, area, contentLanguage } = state.userInput;
+        const { gender, area, contentLanguage, userName } = state.userInput;
         if (!area) return;
         
         dispatch({ type: 'START_GENERATION' });
@@ -316,15 +324,15 @@ const AppContent: React.FC = () => {
             recordRequest('image-generation');
             const [imageUrl, analysis] = await Promise.all([
                 generateCustomImage(prompt, contentLanguage),
-                generateSymbolicAnalysis(scenarioTitle, prompt, gender, contentLanguage),
+                generateSymbolicAnalysis(scenarioTitle, prompt, gender, contentLanguage, userName),
             ]);
             
             // Step 3: Generate affirmation text (fast, no audio generation)
             currentStep = 'analysis';
             dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
-            const affirmationText = await generateAffirmationText(analysis, gender, contentLanguage);
+            const affirmationText = await generateAffirmationText(analysis, gender, contentLanguage, userName);
 
-            // Step 4 & 5: Generate narration (ElevenLabs) AND load music in PARALLEL for speed
+            // Step 4 & 5: Generate narration (Gemini TTS) AND load music in PARALLEL for speed
             currentStep = 'narration';
             dispatch({ type: 'SET_LOADING_STEP', payload: currentStep });
             recordRequest('tts-generation');
@@ -364,7 +372,7 @@ const AppContent: React.FC = () => {
                     : `Could not complete step: '${currentStep}'. Please try again.`;
             dispatch({ type: 'GENERATION_FAILURE', payload: errorMessage });
         }
-    }, [state.userInput.gender, state.userInput.area, state.userInput.contentLanguage, t, checkRateLimits]);
+    }, [state.userInput.gender, state.userInput.area, state.userInput.contentLanguage, state.userInput.userName, t, checkRateLimits]);
     
     const handleEditImage = useCallback(async (imageToEdit: GeneratedImage, prompt: string) => {
         // Check rate limit for image editing
@@ -395,8 +403,17 @@ const AppContent: React.FC = () => {
         }
     }, [t]);
 
+    const handleLanguageSelection = useCallback((contentLang: ContentLanguage) => {
+        // Set UI language based on content language selection
+        const uiLanguage = contentLang === 'es-latam' ? 'es' : 'en';
+        setLanguage(uiLanguage);
+        dispatch({ type: 'SET_CONTENT_LANGUAGE', payload: contentLang });
+    }, [setLanguage]);
+
     const renderContent = () => {
         switch (state.status) {
+            case AppStatus.LanguageSelection:
+                return <LanguageSelectionScreen onSelectLanguage={handleLanguageSelection} />;
             case AppStatus.Welcome:
                 return <WelcomeScreen onStart={() => dispatch({ type: 'START_SESSION' })} />;
             case AppStatus.Input:
@@ -489,10 +506,10 @@ const AppContent: React.FC = () => {
                 </Suspense>
             </main>
             
-            {/* Floating quota monitor for ElevenLabs API usage */}
-            <Suspense fallback={null}>
+            {/* Floating quota monitor - Hidden while using Gemini TTS (no quota tracking) */}
+            {/* <Suspense fallback={null}>
                 <QuotaMonitor visible={true} />
-            </Suspense>
+            </Suspense> */}
         </div>
     );
 };
