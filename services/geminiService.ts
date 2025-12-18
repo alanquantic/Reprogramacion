@@ -1,7 +1,7 @@
 /**
  * Gemini AI Service
- * Handles image generation and text generation (analysis, affirmations)
- * TTS functionality is preserved but not actively used (ElevenLabs is used instead)
+ * Handles image generation, text generation (analysis, affirmations), and TTS narration
+ * Uses Gemini TTS (gemini-2.5-flash-preview-tts) for meditation narration
  */
 
 import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
@@ -22,69 +22,106 @@ const getAiClient = () => {
 const LANGUAGE_CONFIG: Record<ContentLanguage, {
     imageStyle: string;
     customImagePrompt: (prompt: string) => string;
-    genderInstruction: (gender: Gender) => string;
-    analysisPrompt: (scenarioTitle: string, prompt: string, genderInstruction: string) => string;
-    affirmationPrompt: (analysis: string, genderInstruction: string) => string;
+    genderInstruction: (gender: Gender, userName: string) => string;
+    analysisPrompt: (scenarioTitle: string, prompt: string, genderInstruction: string, userName: string) => string;
+    affirmationPrompt: (analysis: string, genderInstruction: string, userName: string) => string;
 }> = {
     'es-latam': {
         imageStyle: 'arte visionario, estilo de arte digital, detallado, alta resolución, onírico, simbólico, cargado emocionalmente, fotorrealista',
         customImagePrompt: (prompt: string) => `Crea una imagen simbólica y onírica basada en esta intención: "${prompt}". Estilo de arte digital, detallado, alta resolución, cargado emocionalmente, fotorrealista, arte visionario.`,
-        genderInstruction: (gender: Gender) => `El usuario se identifica con el género ${gender === 'male' ? 'masculino' : gender === 'female' ? 'femenino' : 'neutro'}. Dirígete a él/ella/elle de forma apropiada y asegúrate de que todos los adjetivos concuerden.`,
-        analysisPrompt: (scenarioTitle: string, prompt: string, genderInstruction: string) => `
-            Eres un psicoterapeuta Junguiano y un experto en simbología. Tu tarea es analizar un prompt de imagen de IA que fue creado para ayudar a un usuario a superar un bloqueo. Explica el significado simbólico de la escena y cómo ayuda al usuario a integrar su sombra y avanzar en su sanación.
+        genderInstruction: (gender: Gender, userName: string) => {
+            const nameInstruction = userName ? `El nombre del usuario es "${userName}".` : '';
+            if (gender === 'female') {
+                return `${nameInstruction} IMPORTANTE: El usuario es MUJER. Usa SIEMPRE género femenino: "Estimada", "querida", "bendecida", "conectada", "fortalecida", "sanada", etc. Todos los adjetivos y participios deben terminar en -a (femenino).`;
+            } else if (gender === 'male') {
+                return `${nameInstruction} IMPORTANTE: El usuario es HOMBRE. Usa SIEMPRE género masculino: "Estimado", "querido", "bendecido", "conectado", "fortalecido", "sanado", etc. Todos los adjetivos y participios deben terminar en -o (masculino).`;
+            } else {
+                return `${nameInstruction} Usa un lenguaje neutro e inclusivo. Evita adjetivos con género cuando sea posible, o usa alternativas como "eres alguien valiente", "tienes la capacidad de...".`;
+            }
+        },
+        analysisPrompt: (scenarioTitle: string, prompt: string, genderInstruction: string, userName: string) => {
+            const personalGreeting = userName ? `Inicia el mensaje con "Querida ${userName}," si es mujer o "Querido ${userName}," si es hombre.` : '';
+            return `
+            Eres un psicoterapeuta Junguiano y experto en simbología. Analiza este prompt de imagen creado para ayudar al usuario a superar un bloqueo.
+
+            GÉNERO DEL USUARIO (MUY IMPORTANTE - SEGUIR ESTRICTAMENTE):
+            ${genderInstruction}
 
             Contexto:
-            - ${genderInstruction}
-            - Título del escenario de sanación: "${scenarioTitle}"
-            - Prompt de la imagen: "${prompt}"
+            - Escenario: "${scenarioTitle}"
+            - Prompt de imagen: "${prompt}"
 
             Instrucciones:
-            - Escribe un análisis breve (2-3 párrafos) en un tono cálido, perspicaz y empoderador.
-            - Desglosa los símbolos clave de la imagen.
-            - Explica cómo la imagen representa la integración de la sombra (cómo el 'problema' se convierte en una fortaleza).
-            - Conecta la escena con la intención de sanación del escenario.
-            - Habla directamente al usuario ('Esta imagen te invita a...'), usando el género correcto.
-            - IMPORTANTE: Responde ÚNICAMENTE en español latinoamericano (no uses "vosotros" ni conjugaciones de España, usa "ustedes" y formas latinoamericanas).
-        `,
-        affirmationPrompt: (analysis: string, genderInstruction: string) => `
-            Basado en el siguiente análisis psicológico, crea una afirmación corta y poderosa en primera persona ("Yo soy...", "Yo elijo...", "Yo permito...").
-            Debe ser una frase directa, positiva y concisa (máximo 15 palabras) que encapsule la esencia de la transformación.
+            - ${personalGreeting}
+            - Escribe 2-3 párrafos cálidos y empoderadores.
+            - Desglosa los símbolos clave.
+            - Explica cómo integra la sombra.
+            - Habla directamente al usuario usando el género correcto en TODOS los adjetivos.
+            - Español latinoamericano (no "vosotros").
+            
+            RECUERDA: Verifica que cada adjetivo concuerde con el género indicado.
+        `;
+        },
+        affirmationPrompt: (analysis: string, genderInstruction: string, userName: string) => {
+            const nameNote = userName ? ` Puedes incluir el nombre "${userName}" si fluye naturalmente.` : '';
+            return `
+            Crea una afirmación en primera persona ("Yo soy...", "Yo elijo..."). Máximo 15 palabras.${nameNote}
 
+            GÉNERO: ${genderInstruction}
+            
             Análisis: "${analysis}"
-            Contexto Adicional: ${genderInstruction}
 
-            Genera únicamente la frase de afirmación en español latinoamericano.
-        `,
+            IMPORTANTE: Si el usuario es mujer, usa adjetivos femeninos (ej: "Yo soy poderosa", "Yo estoy conectada").
+            Si es hombre, usa masculinos (ej: "Yo soy poderoso", "Yo estoy conectado").
+            
+            Genera solo la frase de afirmación.
+        `;
+        },
     },
     'en': {
         imageStyle: 'visionary art, digital art style, detailed, high resolution, dreamlike, symbolic, emotionally charged, photorealistic',
         customImagePrompt: (prompt: string) => `Create a symbolic and dreamlike image based on this intention: "${prompt}". Digital art style, detailed, high resolution, emotionally charged, photorealistic, visionary art.`,
-        genderInstruction: (gender: Gender) => `The user identifies with the ${gender === 'male' ? 'masculine' : gender === 'female' ? 'feminine' : 'neutral'} gender. Address them appropriately and ensure all adjectives agree.`,
-        analysisPrompt: (scenarioTitle: string, prompt: string, genderInstruction: string) => `
-            You are a Jungian psychotherapist and an expert in symbology. Your task is to analyze an AI image prompt that was created to help a user overcome a blockage. Explain the symbolic meaning of the scene and how it helps the user integrate their shadow and advance in their healing.
+        genderInstruction: (gender: Gender, userName: string) => {
+            const nameInstruction = userName ? `The user's name is "${userName}".` : '';
+            if (gender === 'female') {
+                return `${nameInstruction} IMPORTANT: The user is a WOMAN. Use "she/her" pronouns. Address her as "Dear [name]" if name is provided.`;
+            } else if (gender === 'male') {
+                return `${nameInstruction} IMPORTANT: The user is a MAN. Use "he/him" pronouns. Address him as "Dear [name]" if name is provided.`;
+            } else {
+                return `${nameInstruction} Use gender-neutral language. Prefer "you/your" and avoid gendered terms.`;
+            }
+        },
+        analysisPrompt: (scenarioTitle: string, prompt: string, genderInstruction: string, userName: string) => {
+            const personalGreeting = userName ? `Start with "Dear ${userName},"` : '';
+            return `
+            You are a Jungian psychotherapist and symbology expert. Analyze this AI image prompt created to help the user overcome a blockage.
+
+            USER GENDER (VERY IMPORTANT - FOLLOW STRICTLY):
+            ${genderInstruction}
 
             Context:
-            - ${genderInstruction}
-            - Healing scenario title: "${scenarioTitle}"
+            - Scenario: "${scenarioTitle}"
             - Image prompt: "${prompt}"
 
             Instructions:
-            - Write a brief analysis (2-3 paragraphs) in a warm, insightful, and empowering tone.
-            - Break down the key symbols in the image.
-            - Explain how the image represents shadow integration (how the 'problem' becomes a strength).
-            - Connect the scene with the healing intention of the scenario.
-            - Speak directly to the user ('This image invites you to...'), using the correct gender.
-            - Respond ONLY in English.
-        `,
-        affirmationPrompt: (analysis: string, genderInstruction: string) => `
-            Based on the following psychological analysis, create a short and powerful affirmation in first person ("I am...", "I choose...", "I allow...").
-            It should be a direct, positive, and concise phrase (maximum 15 words) that encapsulates the essence of the transformation.
+            - ${personalGreeting}
+            - Write 2-3 warm, empowering paragraphs.
+            - Break down key symbols.
+            - Explain shadow integration.
+            - Speak directly to the user using correct pronouns.
+            - Respond in English only.
+        `;
+        },
+        affirmationPrompt: (analysis: string, genderInstruction: string, userName: string) => {
+            const nameNote = userName ? ` You may include "${userName}" if it flows naturally.` : '';
+            return `
+            Create a first-person affirmation ("I am...", "I choose..."). Maximum 15 words.${nameNote}
 
             Analysis: "${analysis}"
-            Additional Context: ${genderInstruction}
 
             Generate only the affirmation phrase in English.
-        `,
+        `;
+        },
     },
 };
 
@@ -195,11 +232,12 @@ export const generateSymbolicAnalysis = async (
     scenarioTitle: string,
     prompt: string,
     gender: Gender,
-    contentLanguage: ContentLanguage
+    contentLanguage: ContentLanguage,
+    userName: string
 ): Promise<string> => {
     const config = LANGUAGE_CONFIG[contentLanguage];
-    const genderInstruction = config.genderInstruction(gender);
-    const analysisPrompt = config.analysisPrompt(scenarioTitle, prompt, genderInstruction);
+    const genderInstruction = config.genderInstruction(gender, userName);
+    const analysisPrompt = config.analysisPrompt(scenarioTitle, prompt, genderInstruction, userName);
 
     try {
         const ai = getAiClient();
@@ -221,16 +259,17 @@ export const generateSymbolicAnalysis = async (
 export const generateAffirmationText = async (
     analysis: string,
     gender: Gender,
-    contentLanguage: ContentLanguage
+    contentLanguage: ContentLanguage,
+    userName: string
 ): Promise<string> => {
     const config = LANGUAGE_CONFIG[contentLanguage];
-    const genderInstruction = config.genderInstruction(gender);
-    const textPrompt = config.affirmationPrompt(analysis, genderInstruction);
+    const genderInstruction = config.genderInstruction(gender, userName);
+    const textPrompt = config.affirmationPrompt(analysis, genderInstruction, userName);
 
     try {
         const ai = getAiClient();
         const textResponse = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.5-flash',  // Text model for text generation
             contents: textPrompt,
         });
         const affirmationText = textResponse.text.trim().replace(/"/g, '');
@@ -247,183 +286,28 @@ export const generateAffirmationText = async (
 };
 
 // ============================================================================
-// GEMINI TTS - PRESERVED FOR FUTURE USE (Currently using ElevenLabs instead)
+// GEMINI TTS - DEPRECATED: Now using Google Cloud TTS API
+// See: services/googleCloudTtsService.ts
 // ============================================================================
+// TTS functionality has been moved to googleCloudTtsService.ts which uses
+// the Google Cloud Text-to-Speech API with gemini-2.5-pro-tts model.
+// This provides better audio quality (MP3 format) and more control over
+// voice parameters like speaking rate, pitch, and volume.
 
-// Gemini TTS voice configuration by gender
-// Selected voices with calm, meditative qualities for Spanish narration
-// Aoede and Kore are softer/gentler voices
-const GEMINI_VOICES: Record<Gender, string> = {
-    male: 'Charon',    // Male voice - deep and calm
-    female: 'Aoede',   // Female voice - soft, gentle, soothing  
-    neutral: 'Kore',   // Neutral voice - warm and calming
-};
+// export const generateAffirmationAndAudio = async (
+//     analysis: string,
+//     gender: Gender,
+//     language: Language
+// ): Promise<{ affirmationText: string, affirmationAudioData: string }> => {
+//     const affirmationText = await generateAffirmationText(analysis, gender, language);
+//     return { affirmationText, affirmationAudioData: '' };
+// };
 
-const GEMINI_VOICE_NAMES: Record<Gender, string> = {
-    male: 'Charon (masculine calm)',
-    female: 'Aoede (feminine soft)',
-    neutral: 'Kore (neutral warm)',
-};
-
-/**
- * Text-to-Speech with gender-based voice selection (GEMINI TTS)
- * Uses Gemini TTS for calm, meditative narration
- * Wraps text with style instructions for meditation delivery
- * 
- * NOTE: This function is preserved but NOT actively used.
- * The app currently uses ElevenLabs for TTS instead.
- */
-const textToSpeechWithGenderGemini = async (text: string, gender: Gender): Promise<string> => {
-    const voiceName = GEMINI_VOICES[gender];
-    const voiceLabel = GEMINI_VOICE_NAMES[gender];
-    
-    console.log(`[Gemini TTS] Generating speech with voice: ${voiceLabel}`);
-    console.log("[Gemini TTS] Text preview:", text.substring(0, 80) + "...");
-    
-    // Wrap text with style instructions for meditation narration
-    const styledText = `<speak slowly and calmly, like a meditation guide, with a soft and soothing tone, taking natural pauses between phrases>
-
-${text}
-
-</speak>`;
-    
-    try {
-        const ai = getAiClient();
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash-preview-tts",
-            contents: [{ parts: [{ text: styledText }] }],
-            config: {
-                responseModalities: [Modality.AUDIO],
-                speechConfig: {
-                    voiceConfig: {
-                        prebuiltVoiceConfig: { voiceName },
-                    },
-                },
-            },
-        });
-        
-        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        
-        if (!base64Audio) {
-            throw new Error("No audio data received from TTS API.");
-        }
-        
-        console.log("[Gemini TTS] Audio generated successfully, size:", base64Audio.length, "chars");
-        return base64Audio;
-    } catch (error) {
-        console.error("[Gemini TTS] Error generating speech:", error);
-        throw new Error("Failed to generate audio from text.");
-    }
-};
-
-/**
- * Prepares text for calm, meditative narration.
- * Adds natural pauses and breathing room for a more relaxed delivery.
- * Uses longer pauses and breathing cues for a meditation-like pace.
- */
-function prepareTextForCalmNarration(text: string): string {
-    return text
-        // Add long pauses after paragraphs (breathing moments)
-        .replace(/\n\n/g, '...... ')
-        // Add medium pauses after line breaks
-        .replace(/\n/g, '.... ')
-        // Add pauses after sentences (natural breathing)
-        .replace(/\. /g, '.... ')
-        // Add pauses after colons for anticipation
-        .replace(/: /g, ':.... ')
-        // Add pauses after commas for gentler pacing
-        .replace(/, /g, ',... ')
-        // Clean up excessive pauses
-        .replace(/\.{7,}/g, '......')
-        .trim();
-}
-
-/**
- * Generates narration audio using Gemini TTS (PRESERVED FOR FUTURE USE)
- * 
- * NOTE: This function is preserved but NOT actively used.
- * The app currently uses ElevenLabs for TTS via elevenlabsService.ts
- */
-export const generateAnalysisNarrationGemini = async (
-    analysisText: string,
-    gender: Gender
-): Promise<string> => {
-    const voiceLabel = GEMINI_VOICE_NAMES[gender];
-    console.log(`[Gemini Narration] Generating analysis narration with voice: ${voiceLabel}`);
-    console.log(`[Gemini Narration] Analysis length: ${analysisText.length} chars`);
-    
-    // Prepare text with pauses for a more relaxed, meditative delivery
-    const narrativeText = prepareTextForCalmNarration(analysisText);
-    
-    console.log(`[Gemini Narration] Prepared text preview: ${narrativeText.substring(0, 100)}...`);
-    
-    return textToSpeechWithGenderGemini(narrativeText, gender);
-};
-
-// Legacy function kept for backwards compatibility
-export const generateAffirmationAndAudio = async (
-    analysis: string,
-    gender: Gender,
-    language: Language
-): Promise<{ affirmationText: string, affirmationAudioData: string }> => {
-    const affirmationText = await generateAffirmationText(analysis, gender, language);
-    return { affirmationText, affirmationAudioData: '' }; // No audio needed
-};
-
-export const generateInductionAudio = async (analysis: string, gender: Gender, language: Language): Promise<string> => {
-    const isSpanish = language === 'es';
-    const genderInstruction = isSpanish
-        ? `Dirígete al usuario de acuerdo a su género (${gender === 'male' ? 'masculino' : gender === 'female' ? 'femenino' : 'neutro'}).`
-        : `Address the user according to their gender (${gender}).`;
-    
-    const prompt = isSpanish
-        ? `
-            Eres un guía de meditación con una voz calmada y tranquilizadora. Basado en el siguiente análisis de un bloqueo emocional, crea un guion de inducción a la meditación muy corto (30-45 segundos).
-            El objetivo es guiar al usuario a un estado de relajación y receptividad antes de que vea su símbolo de poder.
-            
-            Instrucciones:
-            - Comienza invitando a tomar una respiración profunda.
-            - Guía al usuario para que libere tensiones físicas y mentales.
-            - Prepara su mente para recibir una nueva imagen sanadora.
-            - Termina con una frase que le invite a abrirse a la transformación.
-            - Sé conciso, directo y usa un lenguaje suave y empoderador.
-            - ${genderInstruction}
-
-            Análisis del bloqueo: "${analysis}"
-
-            Genera únicamente el texto del guion en español.
-        `
-        : `
-            You are a meditation guide with a calm and soothing voice. Based on the following emotional blockage analysis, create a very short meditation induction script (30-45 seconds).
-            The goal is to guide the user to a state of relaxation and receptivity before they see their power symbol.
-            
-            Instructions:
-            - Begin by inviting a deep breath.
-            - Guide the user to release physical and mental tensions.
-            - Prepare their mind to receive a new healing image.
-            - End with a phrase inviting them to open to transformation.
-            - Be concise, direct, and use soft, empowering language.
-            - ${genderInstruction}
-
-            Blockage analysis: "${analysis}"
-
-            Generate only the script text in English.
-        `;
-    
-    try {
-        const ai = getAiClient();
-        const textResponse = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-        });
-        const inductionText = textResponse.text.trim();
-        if (!inductionText) {
-            throw new Error("Failed to generate induction script text.");
-        }
-        // Note: This uses Gemini TTS - preserved for future use
-        return await textToSpeechWithGenderGemini(inductionText, gender);
-    } catch (error) {
-        console.error("Error generating induction audio:", error);
-        throw new Error("Failed to generate induction audio from Gemini.");
-    }
-};
+// export const generateInductionAudio = async (
+//     analysis: string,
+//     gender: Gender,
+//     language: Language
+// ): Promise<string> => {
+//     // Implementation removed - not currently in use
+//     throw new Error("generateInductionAudio is not currently implemented");
+// };

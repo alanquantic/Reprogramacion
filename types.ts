@@ -4,6 +4,7 @@
 
 
 export enum AppStatus {
+    LanguageSelection = 'LANGUAGE_SELECTION',
     Welcome = 'WELCOME',
     Input = 'INPUT',
     Loading = 'LOADING',
@@ -12,7 +13,7 @@ export enum AppStatus {
     History = 'HISTORY',
 }
 
-export type FormStep = 'contentLanguage' | 'area' | 'scenario';
+export type FormStep = 'name' | 'area' | 'scenario';
 export type LoadingStep = 'prompt' | 'image' | 'analysis' | 'narration' | 'music' | null;
 export type Gender = 'male' | 'female' | 'neutral';
 export type Language = 'es' | 'en';
@@ -58,7 +59,7 @@ export interface GeneratedImage {
     // Audio data fields (stored in IndexedDB, not localStorage)
     affirmationAudioData: string; // Legacy - kept for backwards compatibility
     inductionAudioData: string;
-    analysisAudioData: string; // Narration of analysis (ElevenLabs TTS)
+    analysisAudioData: string; // Narration of analysis (Google Cloud TTS - MP3 format)
     backgroundMusicData: string; // Relaxing background music (Gemini generated, 15s loop)
 }
 
@@ -75,6 +76,7 @@ export interface AppState {
     formStep: FormStep;
     userInput: {
         contentLanguage: ContentLanguage;
+        userName: string;
         area: ReprogramArea | null;
         scenario: Scenario | null;
         gender: Gender;
@@ -95,6 +97,7 @@ export interface AppState {
 export type AppAction =
     | { type: 'START_SESSION' }
     | { type: 'SET_CONTENT_LANGUAGE'; payload: ContentLanguage }
+    | { type: 'SET_USER_NAME'; payload: string }
     | { type: 'SELECT_AREA'; payload: ReprogramArea }
     | { type: 'SELECT_SCENARIO'; payload: Scenario }
     | { type: 'SET_GENDER'; payload: Gender }

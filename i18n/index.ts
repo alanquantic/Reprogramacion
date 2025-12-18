@@ -174,14 +174,20 @@ export interface Translations {
     quotaError: string;
     quotaRefresh: string;
     
-    // Content Language Selection Step
-    contentLangStepTitle: string;
-    contentLangStepDescription: string;
-    contentLangSpanish: string;
-    contentLangSpanishDesc: string;
-    contentLangEnglish: string;
-    contentLangEnglishDesc: string;
-    contentLangContinue: string;
+    // Language Selection Screen (Initial)
+    langSelectTitle: string;
+    langSelectDescription: string;
+    langSelectSpanish: string;
+    langSelectSpanishDesc: string;
+    langSelectEnglish: string;
+    langSelectEnglishDesc: string;
+    
+    // User Name Input
+    nameInputLabel: string;
+    nameInputPlaceholder: string;
+    nameInputDescription: string;
+    continueButton: string;
+    backButton: string;
 }
 
 const translations: Record<Language, Translations> = {
