@@ -9,16 +9,18 @@ import { Gender, ContentLanguage } from '../types';
 const TTS_API_URL = process.env.TTS_API_URL || 'http://localhost:3001';
 
 // Voice descriptions for logging (Gemini 2.5 Pro TTS voices)
+// MALE: Enceladus (breathy), Schedar (even), Umbriel (easy-going), Algieba (smooth)
+// FEMALE: Sulafat (warm), Vindemiatrix (gentle), Achernar (soft), Aoede (breezy)
 const VOICE_NAMES: Record<ContentLanguage, Record<Gender, string>> = {
     'es-latam': {
-        male: 'Sulafat (cálida, reconfortante)',
-        female: 'Achernar (suave, delicada)',
-        neutral: 'Aoede (serena, tranquila)',
+        male: 'Enceladus (etéreo, meditativo)',
+        female: 'Sulafat (cálida, reconfortante)',
+        neutral: 'Schedar (equilibrado, sereno)',
     },
     'en': {
-        male: 'Sulafat (warm, soothing)',
+        male: 'Enceladus (breathy, meditative)',
         female: 'Vindemiatrix (gentle, calming)',
-        neutral: 'Enceladus (breathy, meditative)',
+        neutral: 'Schedar (even, balanced)',
     },
 };
 
@@ -109,41 +111,54 @@ export async function checkTtsApiHealth(): Promise<boolean> {
 
 /**
  * All 30 available Gemini TTS voices with their characteristics
+ * 
+ * MALE voices: Puck, Charon, Fenrir, Orus, Achird, Algenib, Algieba, Alnilam,
+ *              Enceladus, Iapetus, Rasalgethi, Sadachbia, Sadaltager, Schedar,
+ *              Umbriel, Zubenelgenubi
+ * 
+ * FEMALE voices: Zephyr, Kore, Leda, Aoede, Callirrhoe, Autonoe, Despina,
+ *                Erinome, Laomedeia, Achernar, Gacrux, Pulcherrima, Vindemiatrix,
+ *                Sulafat
  */
 export const AVAILABLE_VOICES = {
-    // Calm/meditation suitable voices
-    calm: ['Sulafat', 'Achernar', 'Vindemiatrix', 'Enceladus', 'Aoede', 'Despina', 'Algieba'],
-    // All voices by characteristic
+    // Calm/meditation suitable voices by gender
+    calm: {
+        male: ['Enceladus', 'Schedar', 'Umbriel', 'Algieba'],
+        female: ['Sulafat', 'Vindemiatrix', 'Achernar', 'Aoede', 'Despina'],
+    },
+    // All voices by characteristic and gender
     all: [
-        { name: 'Zephyr', style: 'Bright' },
-        { name: 'Puck', style: 'Upbeat' },
-        { name: 'Charon', style: 'Informative' },
-        { name: 'Kore', style: 'Firm' },
-        { name: 'Fenrir', style: 'Excitable' },
-        { name: 'Leda', style: 'Youthful' },
-        { name: 'Orus', style: 'Firm' },
-        { name: 'Aoede', style: 'Breezy' },
-        { name: 'Callirrhoe', style: 'Easy-going' },
-        { name: 'Autonoe', style: 'Bright' },
-        { name: 'Enceladus', style: 'Breathy' },
-        { name: 'Iapetus', style: 'Clear' },
-        { name: 'Umbriel', style: 'Easy-going' },
-        { name: 'Algieba', style: 'Smooth' },
-        { name: 'Despina', style: 'Smooth' },
-        { name: 'Erinome', style: 'Clear' },
-        { name: 'Algenib', style: 'Gravelly' },
-        { name: 'Rasalgethi', style: 'Informative' },
-        { name: 'Laomedeia', style: 'Upbeat' },
-        { name: 'Achernar', style: 'Soft' },
-        { name: 'Alnilam', style: 'Firm' },
-        { name: 'Schedar', style: 'Even' },
-        { name: 'Gacrux', style: 'Mature' },
-        { name: 'Pulcherrima', style: 'Forward' },
-        { name: 'Achird', style: 'Friendly' },
-        { name: 'Zubenelgenubi', style: 'Casual' },
-        { name: 'Vindemiatrix', style: 'Gentle' },
-        { name: 'Sadachbia', style: 'Lively' },
-        { name: 'Sadaltager', style: 'Knowledgeable' },
-        { name: 'Sulafat', style: 'Warm' },
+        // Male voices
+        { name: 'Puck', style: 'Upbeat', gender: 'male' },
+        { name: 'Charon', style: 'Informative', gender: 'male' },
+        { name: 'Fenrir', style: 'Excitable', gender: 'male' },
+        { name: 'Orus', style: 'Firm', gender: 'male' },
+        { name: 'Achird', style: 'Friendly', gender: 'male' },
+        { name: 'Algenib', style: 'Gravelly', gender: 'male' },
+        { name: 'Algieba', style: 'Smooth', gender: 'male' },
+        { name: 'Alnilam', style: 'Firm', gender: 'male' },
+        { name: 'Enceladus', style: 'Breathy', gender: 'male' },
+        { name: 'Iapetus', style: 'Clear', gender: 'male' },
+        { name: 'Rasalgethi', style: 'Informative', gender: 'male' },
+        { name: 'Sadachbia', style: 'Lively', gender: 'male' },
+        { name: 'Sadaltager', style: 'Knowledgeable', gender: 'male' },
+        { name: 'Schedar', style: 'Even', gender: 'male' },
+        { name: 'Umbriel', style: 'Easy-going', gender: 'male' },
+        { name: 'Zubenelgenubi', style: 'Casual', gender: 'male' },
+        // Female voices
+        { name: 'Zephyr', style: 'Bright', gender: 'female' },
+        { name: 'Kore', style: 'Firm', gender: 'female' },
+        { name: 'Leda', style: 'Youthful', gender: 'female' },
+        { name: 'Aoede', style: 'Breezy', gender: 'female' },
+        { name: 'Callirrhoe', style: 'Easy-going', gender: 'female' },
+        { name: 'Autonoe', style: 'Bright', gender: 'female' },
+        { name: 'Despina', style: 'Smooth', gender: 'female' },
+        { name: 'Erinome', style: 'Clear', gender: 'female' },
+        { name: 'Laomedeia', style: 'Upbeat', gender: 'female' },
+        { name: 'Achernar', style: 'Soft', gender: 'female' },
+        { name: 'Gacrux', style: 'Mature', gender: 'female' },
+        { name: 'Pulcherrima', style: 'Forward', gender: 'female' },
+        { name: 'Vindemiatrix', style: 'Gentle', gender: 'female' },
+        { name: 'Sulafat', style: 'Warm', gender: 'female' },
     ],
 };
